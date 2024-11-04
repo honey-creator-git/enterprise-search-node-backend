@@ -82,3 +82,63 @@ exports.deleteIndex = async (req, res) => {
     });
   }
 };
+
+// Controller to list all indices
+exports.listIndices = async (req, res) => {
+  try {
+    // Fetch all indices using the _cat/indices API with JSON output format
+    const response = await client.cat.indices({
+      format: "json",
+    });
+
+    console.log("Response for list indices => ", response);
+
+    // Extract necessary details (e.g., index name, health, status, document count)
+    const indices = response.map((index) => ({
+      index: index.index,
+      health: index.health,
+      status: index.status,
+      documentCount: index.documentCount,
+      storeSize: index.storeSize,
+    }));
+
+    res.status(200).json({
+      message: "List of all indices",
+      total: indices.length,
+      indices,
+    });
+  } catch (error) {
+    console.error("Error listening indices: ", error);
+    res.status(500).json({
+      error: "Failed to list indices",
+      details: error.message,
+    });
+  }
+};
+
+// Controller to update index settings
+exports.updateIndexSettings = async (req, res) => {
+  const indexName = req.params.indexName; // Get index name from URL parameters
+  const settings = req.body.settings; // Settings to update, passed in the request body
+
+  try {
+    // Update the settings for the specified index
+    const response = await client.indices.putSettings({
+      index: "index_" + indexName + "_documents",
+      body: {
+        settings,
+      },
+    });
+
+    res.status(200).json({
+      message: `Settings for index "${indexName}" updated successfully.`,
+      response: response,
+    });
+  } catch (error) {
+    console.error("Error updating index settings: ", error);
+    res.status(500).json({
+      error: "Failed to update index settings",
+      details: error.message,
+    });
+  }
+};
