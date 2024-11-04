@@ -1,5 +1,6 @@
 const express = require("express");
 const documentController = require("../controllers/documentController");
+const authorize = require("../middleware/authorize");
 const router = express.Router();
 
 // Route to add a new document to an index (accessible by admin, manager, and editor)
