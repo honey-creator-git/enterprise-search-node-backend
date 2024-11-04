@@ -11,10 +11,9 @@ const roles = {
       "addDocument",
       "updateDocument",
       "deleteDocument",
-      "getDocument",
       "searchDocuments",
       "getAllDocumentFromIndex",
-      "getAllDocumentsAcrossIndices",
+      "getAllDocumentAcrossAllIndices",
       "searchDocumentsAcrossAllIndices",
     ],
   },
@@ -27,7 +26,6 @@ const roles = {
       "addDocument",
       "updateDocument",
       "deleteDocument",
-      "getDocument",
       "searchDocuments",
       "getAllDocumentFromIndex",
     ],
@@ -36,7 +34,6 @@ const roles = {
     can: [
       "addDocument",
       "updateDocument",
-      "getDocument",
       "searchDocuments",
       "getAllDocumentFromIndex",
       "listIndices",
@@ -44,7 +41,6 @@ const roles = {
   },
   viewer: {
     can: [
-      "getDocument",
       "searchDocuments",
       "getAllDocumentFromIndex",
       "listIndices",
