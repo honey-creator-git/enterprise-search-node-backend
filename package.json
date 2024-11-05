@@ -12,6 +12,7 @@
   "dependencies": {
     "@elastic/elasticsearch": "^8.15.1",
     "dotenv": "^16.4.5",
-    "express": "^4.21.1"
+    "express": "^4.21.1",
+    "nodemon": "^3.1.7"
   }
 }
