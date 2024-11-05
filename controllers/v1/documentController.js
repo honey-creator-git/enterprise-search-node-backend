@@ -1,4 +1,4 @@
-const client = require("../config/elasticsearch");
+const client = require("../../config/elasticsearch");
 
 // Controller to add a new document to an index
 exports.addDocument = async (req, res) => {

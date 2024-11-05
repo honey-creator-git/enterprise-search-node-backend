@@ -1,4 +1,4 @@
-const client = require("../config/elasticsearch");
+const client = require("../../config/elasticsearch");
 
 // Controller to create a new index
 exports.createIndex = async (req, res) => {

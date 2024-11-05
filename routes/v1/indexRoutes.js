@@ -1,9 +1,9 @@
 const express = require("express");
-const indexController = require("../controllers/indexController");
-const authorize = require("../middleware/authorize");
-const setRoleMiddleware = require("../middleware/setRoleMiddleware");
-const checkAdminAccess = require("../middleware/checkAdminAccess");
-const checkViewerAccess = require("../middleware/checkViewerAccess");
+const indexController = require("../../controllers/v1/indexController");
+const authorize = require("../../middleware/authorize");
+const setRoleMiddleware = require("../../middleware/setRoleMiddleware");
+const checkAdminAccess = require("../../middleware/checkAdminAccess");
+const checkViewerAccess = require("../../middleware/checkViewerAccess");
 const router = express.Router();
 
 // Route to create a new index (only accessible by admin and manager)
