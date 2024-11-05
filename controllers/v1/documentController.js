@@ -12,9 +12,26 @@ exports.addDocument = async (req, res) => {
     });
 
     if (!exists) {
-      return res.status(404).json({
-        message: `Index "index_${indexName}_documents" does not exists.`,
+      await client.indices.create({
+        index: "index_" + indexName + "_documents",
+        body: {
+          settings: {
+            number_of_shards: 1,
+            number_of_replicas: 1,
+          },
+          mappings: {
+            properties: {
+              title: { type: "text" },
+              description: { type: "text" },
+              content: { type: "text" },
+              image: { type: "keyword" },
+            },
+          },
+        },
       });
+      // return res.status(404).json({
+      //   message: `Index "index_${indexName}_documents" does not exists.`,
+      // });
     }
 
     // Add the document to the specified index
