@@ -1,29 +1,40 @@
 const express = require("express");
 const indexController = require("../controllers/indexController");
 const authorize = require("../middleware/authorize");
+const setRoleMiddleware = require("../middleware/setRoleMiddleware");
+const checkAdminAccess = require("../middleware/checkAdminAccess");
+const checkViewerAccess = require("../middleware/checkViewerAccess");
 const router = express.Router();
 
 // Route to create a new index (only accessible by admin and manager)
 router.post(
   "/create-index",
-  authorize("createIndex"),
+  setRoleMiddleware,
+  checkAdminAccess,
   indexController.createIndex
 );
 
 // Route to delete an index (only accessible by admin)
 router.delete(
   "/delete-index/:indexName",
-  authorize("deleteIndex"),
+  setRoleMiddleware,
+  checkAdminAccess,
   indexController.deleteIndex
 );
 
 // Route to list all indices (accessible by all roles)
-router.get("/list", authorize("listIndices"), indexController.listIndices);
+router.get(
+  "/list",
+  setRoleMiddleware,
+  checkViewerAccess,
+  indexController.listIndices
+);
 
 // Route to update index settings (only accessible by admin and manager)
 router.put(
   "/update-settings/:indexName",
-  authorize("updateIndex"),
+  setRoleMiddleware,
+  checkAdminAccess,
   indexController.updateIndexSettings
 );
 
