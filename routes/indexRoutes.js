@@ -38,4 +38,11 @@ router.put(
   indexController.updateIndexSettings
 );
 
+router.get(
+  "/reindex/:newIndex/:oldIndex/:aliasName",
+  setRoleMiddleware,
+  checkAdminAccess,
+  indexController.reindexIndices
+);
+
 module.exports = router;
