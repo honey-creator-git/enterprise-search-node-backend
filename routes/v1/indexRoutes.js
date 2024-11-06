@@ -78,4 +78,12 @@ router.post(
   documentController.searchAllDocuments
 );
 
+// Route to search documents with keyword and advanced query support (accessible by all roles)
+router.post(
+  "/:indexName/search",
+  setRoleMiddleware,
+  checkViewerAccess,
+  documentController.searchDocuments
+);
+
 module.exports = router;

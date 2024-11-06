@@ -14,14 +14,6 @@ router.post(
   documentController.addDocument
 );
 
-// Route to search documents with keyword and advanced query support (accessible by all roles)
-router.post(
-  "/:indexName/search",
-  setRoleMiddleware,
-  checkViewerAccess,
-  documentController.searchDocuments
-);
-
 // Route to get all documents from an index (accessible by all roles)
 router.get(
   "/:indexName/get-all-documents",
