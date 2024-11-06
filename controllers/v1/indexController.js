@@ -1,23 +1,35 @@
+const {
+  SearchIndexClient,
+  AzureKeyCredential,
+} = require("@azure/search-documents");
 const client = require("../../config/elasticsearch");
+require("dotenv").config();
+
+const searchEndpoint = process.env.AZURE_SEARCH_ENDPOINT;
+const apiKey = process.env.AZURE_SEARCH_API_KEY;
+const searchClient = new SearchIndexClient(
+  searchEndpoint,
+  new AzureKeyCredential(apiKey)
+);
 
 // Controller to create a new index in Elastic Search Cluster & create a new index in Azure AI Search
 exports.createIndex = async (req, res) => {
-  const indexName = req.body.indexName.toLowerCase() || "coid";
+  const indexName = req.body.indexName?.toLowerCase() || "coid";
 
   try {
     // Check if the index already exists
-    const exists = await client.indices.exists({
+    const esExists = await client.indices.exists({
       index: indexName,
     });
 
-    if (exists) {
+    if (esExists) {
       return res.status(400).json({
-        message: `Index ${indexName} already exists`,
+        message: `Index ${indexName} already exists in Elastic Search Cluster`,
       });
     }
 
     // Create the new index with settings and mappings
-    const response = await client.indices.create({
+    const esResponse = await client.indices.create({
       index: indexName,
       body: {
         settings: {
@@ -35,11 +47,68 @@ exports.createIndex = async (req, res) => {
       },
     });
 
-    // Define indexSchema for the new index in El
+    // Define indexSchema for the new index of Azure AI Search
+    const azureIndexSchema = {
+      name: indexName,
+      fields: [
+        { name: "id", type: "Edm.String", key: true, searchable: false },
+        {
+          name: "title",
+          type: "Edm.String",
+          searchable: true,
+          filterable: true,
+          sortable: true,
+        },
+        {
+          name: "description",
+          type: "Edm.String",
+          searchable: true,
+          filterable: true,
+          sortable: true,
+        },
+        {
+          name: "content",
+          type: "Edm.String",
+          searchable: true,
+          filterable: true,
+          sortable: true,
+        },
+        { name: "image", type: "Edm.String", searchable: true },
+      ],
+      suggesters: [{ name: "sg", sourceFields: ["title", "description"] }],
+      corsOptions: {
+        allowedOrigins: ["*"],
+        allowedHeaders: ["*"],
+        exposedHeaders: ["*"],
+        allowedMethods: ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+      },
+      semantic: {
+        configurations: [
+          {
+            name: "es-semantic-config",
+            prioritizedFields: {
+              titleField: { fieldName: "title" },
+              prioritizedContentFields: [
+                { fieldName: "description" },
+                { fieldName: "content" },
+              ],
+            },
+          },
+        ],
+      },
+      scoringProfiles: [],
+      analyzers: [],
+      tokenFilters: [],
+      charFilters: [],
+    };
 
-    res.status(200).json({
-      message: `Index ${indexName} created successfully.`,
-      response: response.body,
+    const azureResponse = await searchClient.createIndex(azureIndexSchema);
+
+    // Send a successful response with the details of both index creations
+    res.status(201).json({
+      message: `Index ${indexName} created successfully in both Elasticsearch and Azure Cognitive Search.`,
+      elasticsearchResponse: esResponse.body,
+      azureResponse: azureResponse,
     });
   } catch (error) {
     res.status(500).json({
@@ -51,7 +120,7 @@ exports.createIndex = async (req, res) => {
 
 // Controller to delete an index
 exports.deleteIndex = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase(); // Get the index name from the URL parameter
+  const indexName = req.params.indexName?.toLowerCase(); // Get the index name from the URL parameter
 
   console.log("Index Name => ", indexName);
 
@@ -124,7 +193,7 @@ exports.listIndices = async (req, res) => {
 
 // Controller to update index settings
 exports.updateIndexSettings = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase(); // Get index name from URL parameters
+  const indexName = req.params.indexName?.toLowerCase(); // Get index name from URL parameters
   const settings = req.body.settings; // Settings to update, passed in the request body
 
   try {
