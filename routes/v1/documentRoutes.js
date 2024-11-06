@@ -14,4 +14,12 @@ router.get(
   documentController.syncElasticSearchAzureAiSearch
 );
 
+// Route to retrieve all documents across all indices with optional pagination (only accessible by admin)
+router.get(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getAllDocumentsAcrossIndices
+);
+
 module.exports = router;

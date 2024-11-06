@@ -12,7 +12,7 @@ const setRoleMiddleware = (req, res, next) => {
     const decodedToken = jwt.decode(token);
     if (!decodedToken) return res.status(401).send("Invalid token");
 
-    console.log("Decoded Token => ", decodedToken);
+    // console.log("Decoded Token => ", decodedToken);
 
     // Check if "groups" includes "Admin"
     const groups = decodedToken.groups || [];
@@ -22,9 +22,9 @@ const setRoleMiddleware = (req, res, next) => {
     const permissions = decodedToken.permissions || [];
     req.userPermission = permissions.includes("ESS") ? "ESS" : "";
 
-    console.log("User Role => ", req.userRole);
+    // console.log("User Role => ", req.userRole);
 
-    console.log("User Permission => ", req.userPermission);
+    // console.log("User Permission => ", req.userPermission);
 
     next();
   } catch (error) {

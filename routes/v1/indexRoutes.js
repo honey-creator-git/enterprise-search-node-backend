@@ -95,14 +95,6 @@ router.get(
   documentController.getAllDocuments
 );
 
-// Route to retrieve all documents across all indices with optional pagination (only accessible by admin)
-router.get(
-  "/",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.getAllDocumentsAcrossIndices
-);
-
 // Route to add a new document to an index (accessible by admin, manager, and editor)
 router.post(
   "/:indexName",

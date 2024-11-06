@@ -237,10 +237,13 @@ exports.deleteDocument = async (req, res) => {
 exports.searchDocuments = async (req, res) => {
   const indexName = req.params.indexName?.toLowerCase();
   const { keyword, query, fuzziness = "AUTO" } = req.body;
+  const from = 0; // Default to 0 if not provided
+  const size = 10000; // Default to 10 if not provided
+  let searchQuery;
 
   try {
     // Construct the search query
-    const searchQuery = {
+    searchQuery = {
       index: indexName,
       body: {
         query: {
@@ -289,13 +292,39 @@ exports.searchDocuments = async (req, res) => {
       }
     }
 
+    if (
+      keyword?.length === 0 &&
+      query.title?.length === 0 &&
+      query.description?.length === 0 &&
+      query.content?.length === 0
+    ) {
+      searchQuery = {
+        index: "*",
+        body: {
+          query: {
+            match_all: {},
+          },
+          from, // Start from this document (for pagination)
+          size, // Number of documents to retrieve (pagination size)
+        },
+      };
+    }
+
     // Execute the search query
     const response = await client.search(searchQuery);
 
     res.status(200).json({
       message: "Search completed successfully",
       total: response.hits.total.value,
-      results: response.hits.hits.map((hit) => hit._source), // Return only document sources
+      results: response.hits.hits.filter((hit) => {
+        if (hit._index.includes("index_")) {
+          return {
+            index: hit._index, // Include the index name for each document
+            id: hit._id, // Include the document ID
+            source: hit._source, // Document source data
+          };
+        }
+      }), // Return only document sources
     });
   } catch (error) {
     console.error("Error performing search: ", error);
@@ -308,11 +337,14 @@ exports.searchDocuments = async (req, res) => {
 
 // Controller to search documents across all indices with keyword and partial filter support
 exports.searchAllDocuments = async (req, res) => {
+  let searchQuery;
+  const from = 0; // Default to 0 if not provided
+  const size = 10000; // Default to 10 if not provided
   const { keyword, query, fuzziness = "AUTO" } = req.body; // Get keyword, query, and fuzziness from request body
 
   try {
     // Construct the search query
-    const searchQuery = {
+    searchQuery = {
       index: "*", // Use '*' to search across all indices
       body: {
         query: {
@@ -368,13 +400,39 @@ exports.searchAllDocuments = async (req, res) => {
       }
     }
 
+    if (
+      keyword?.length === 0 &&
+      query.title?.length === 0 &&
+      query.description?.length === 0 &&
+      query.content?.length === 0
+    ) {
+      searchQuery = {
+        index: "*",
+        body: {
+          query: {
+            match_all: {},
+          },
+          from, // Start from this document (for pagination)
+          size, // Number of documents to retrieve (pagination size)
+        },
+      };
+    }
+
     // Execute the search query
     const response = await client.search(searchQuery);
 
     res.status(200).json({
       message: "Search across all indices completed successfully",
       total: response.hits.total.value,
-      results: response.hits.hits.map((hit) => hit._source), // Return only document sources
+      results: response.hits.hits.filter((hit) => {
+        if (hit._index.includes("index_")) {
+          return {
+            index: hit._index, // Include the index name for each document
+            id: hit._id, // Include the document ID
+            source: hit._source, // Document source data
+          };
+        }
+      }), // Return only document sources
     });
   } catch (error) {
     console.error("Error performing search across all indices: ", error);
@@ -410,7 +468,13 @@ exports.getAllDocuments = async (req, res) => {
     res.status(200).json({
       message: `Retrieved documents from index "${indexName}".`,
       total: response.hits.total.value,
-      documents: response.hits.hits.map((hit) => hit._source), // Return only document sources
+      documents: response.hits.hits.map((hit) => {
+        return {
+          index: hit._index, // Include the index name for each document
+          id: hit._id, // Include the document ID
+          source: hit._source, // Document source data
+        };
+      }), // Return only document sources
     });
   } catch (error) {
     console.error("Error retrieving documents: ", error);
@@ -445,11 +509,15 @@ exports.getAllDocumentsAcrossIndices = async (req, res) => {
     res.status(200).json({
       message: "Retrieved documents from all indices.",
       total: response.hits.total.value,
-      documents: response.hits.hits.map((hit) => ({
-        index: hit._index, // Include the index name for each document
-        id: hit._id, // Include the document ID
-        source: hit._source, // Document source data
-      })),
+      documents: response.hits.hits.filter((hit) => {
+        if (hit._index.includes("index_")) {
+          return {
+            index: hit._index, // Include the index name for each document
+            id: hit._id, // Include the document ID
+            source: hit._source, // Document source data
+          };
+        }
+      }),
     });
   } catch (error) {
     console.error("Error retrieving documents across all indices: ", error);
