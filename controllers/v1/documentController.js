@@ -12,12 +12,12 @@ exports.addDocument = async (req, res) => {
   try {
     // Check if the nidex exists before attempting to add a document
     const exists = await client.indices.exists({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
     });
 
     if (!exists) {
       await client.indices.create({
-        index: "index_" + indexName + "_documents",
+        index: indexName,
         body: {
           settings: {
             number_of_shards: 1,
@@ -40,14 +40,14 @@ exports.addDocument = async (req, res) => {
 
     // Add the document to the specified index
     const response = await client.index({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       body: document,
     });
 
     console.log("Response => ", response);
 
     res.status(201).json({
-      message: `Document added to index "index_${indexName}_documents" successfully.`,
+      message: `Document added to index ${indexName} successfully.`,
       documentId: response._id,
       response: response,
     });
@@ -67,12 +67,12 @@ exports.getDocument = async (req, res) => {
 
   try {
     const response = await client.get({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       id: documentId,
     });
 
     res.status(200).json({
-      message: `Document retrieved successfully from index "index_${indexName}_documents".`,
+      message: `Document retrieved successfully from index ${indexName}.`,
       document: response._source,
     });
   } catch (error) {
@@ -92,18 +92,18 @@ exports.updateDocument = async (req, res) => {
 
   try {
     const exists = await client.exists({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       id: documentId,
     });
 
     if (!exists) {
       return res.status(404).json({
-        message: `Document with ID "${documentId}" does not exist in index "index_${indexName}_documents".`,
+        message: `Document with ID "${documentId}" does not exist in index ${indexName}.`,
       });
     }
 
     const response = await client.update({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       id: documentId,
       body: {
         doc: updatedFields,
@@ -130,12 +130,12 @@ exports.deleteDocument = async (req, res) => {
 
   try {
     const response = await client.delete({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       id: documentId,
     });
 
     res.status(200).json({
-      message: `Document with ID "${documentId}" deleted successfully from index "index_${indexName}_documents".`,
+      message: `Document with ID "${documentId}" deleted successfully from index ${indexName}.`,
       response: response,
     });
   } catch (error) {
@@ -155,7 +155,7 @@ exports.searchDocuments = async (req, res) => {
   try {
     // Construct the search query
     const searchQuery = {
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       body: {
         query: {
           bool: {
@@ -308,7 +308,7 @@ exports.getAllDocuments = async (req, res) => {
   try {
     // Construct the search query to match all documents
     const searchQuery = {
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       body: {
         query: {
           match_all: {},
@@ -406,7 +406,7 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
   try {
     // Construct the search query to match all documents
     const searchQuery = {
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       body: {
         query: {
           match_all: {},

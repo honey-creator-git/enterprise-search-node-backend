@@ -1,24 +1,24 @@
 const client = require("../../config/elasticsearch");
 
-// Controller to create a new index
+// Controller to create a new index in Elastic Search Cluster & create a new index in Azure AI Search
 exports.createIndex = async (req, res) => {
   const indexName = req.body.indexName.toLowerCase() || "coid";
 
   try {
     // Check if the index already exists
     const exists = await client.indices.exists({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
     });
 
     if (exists) {
       return res.status(400).json({
-        message: `Index "index_${indexName}_documents" already exists`,
+        message: `Index ${indexName} already exists`,
       });
     }
 
     // Create the new index with settings and mappings
     const response = await client.indices.create({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       body: {
         settings: {
           number_of_shards: 1,
@@ -35,8 +35,10 @@ exports.createIndex = async (req, res) => {
       },
     });
 
+    // Define indexSchema for the new index in El
+
     res.status(200).json({
-      message: `Index "index_${indexName}_documents" created successfully.`,
+      message: `Index ${indexName} created successfully.`,
       response: response.body,
     });
   } catch (error) {
@@ -56,18 +58,18 @@ exports.deleteIndex = async (req, res) => {
   try {
     // Check if the index exists
     const exists = await client.indices.exists({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
     });
 
     if (!exists) {
       return res.status(404).json({
-        message: `Index "index_${indexName}_documents" does not exist.`,
+        message: `Index ${indexName} does not exist.`,
       });
     }
 
     // Delete the index
     const response = await client.indices.delete({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
     });
 
     res.status(200).json({
@@ -128,7 +130,7 @@ exports.updateIndexSettings = async (req, res) => {
   try {
     // Update the settings for the specified index
     const response = await client.indices.putSettings({
-      index: "index_" + indexName + "_documents",
+      index: indexName,
       body: {
         settings,
       },
@@ -149,9 +151,9 @@ exports.updateIndexSettings = async (req, res) => {
 
 // Controller to reindex
 exports.reindexIndices = async (req, res) => {
-  const newIndex1 = "index_" + req.params.newIndex.toLowerCase() + "_documents";
-  const oldIndex1 = "index_" + req.params.oldIndex.toLowerCase() + "_documents";
-  const aliasName1 = "index_" + req.params.newIndex.toLowerCase() + "_alias";
+  const newIndex1 = req.params.newIndex.toLowerCase();
+  const oldIndex1 = req.params.oldIndex.toLowerCase();
+  const aliasName1 = req.params.newIndex.toLowerCase() + "_alias";
 
   try {
     // Step 1: Create a new index
