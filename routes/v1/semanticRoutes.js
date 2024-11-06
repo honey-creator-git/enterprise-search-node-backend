@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Route for NLP / Semantic Search
 router.post(
-  "/",
+  "/:indexName",
   setRoleMiddleware,
   checkViewerAccess,
   documentController.searchDocumentsFromAzureAIIndex

@@ -128,7 +128,9 @@ exports.addDocument = async (req, res) => {
       ...document,
       id: esResponse._id, // Assign Elasticsearch document ID as the Azure document ID
     };
-    const azResponse = await searchClientForNewDocument.uploadDocuments([azDocument]);
+    const azResponse = await searchClientForNewDocument.uploadDocuments([
+      azDocument,
+    ]);
 
     res.status(201).json({
       message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
@@ -550,6 +552,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   let filter_of_title = "";
   let filter_of_description = "";
   let filter_of_content = "";
+  const indexName = req.params.indexName;
   const query = req.body.query;
   const title = req.body.title ? req.body.title : "";
   const description = req.body.description ? req.body.description : "";
@@ -617,7 +620,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
 
   try {
     const response = await axios.post(
-      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${process.env.AZURE_SEARCH_INDEX_NAME}/docs/search?api-version=2021-04-30-Preview`,
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2021-04-30-Preview`,
       {
         search: query, // The search query
         filter: filter, // Add filter query here
