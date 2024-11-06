@@ -16,7 +16,7 @@ router.post(
 
 // Route to delete an index (only accessible by admin)
 router.delete(
-  "/delete-index/:indexName",
+  "/:indexName",
   setRoleMiddleware,
   checkAdminAccess,
   indexController.deleteIndex
