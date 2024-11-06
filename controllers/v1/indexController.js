@@ -98,8 +98,8 @@ exports.listIndices = async (req, res) => {
       index: index.index,
       health: index.health,
       status: index.status,
-      documentCount: index.documentCount,
-      storeSize: index.storeSize,
+      documentCount: index["docs.count"],
+      storeSize: index["store.size"],
     }));
 
     res.status(200).json({
