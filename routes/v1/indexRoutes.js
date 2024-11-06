@@ -86,4 +86,20 @@ router.post(
   documentController.searchDocuments
 );
 
+// Route to get all documents from an index (accessible by all roles)
+router.get(
+  "/:indexName",
+  setRoleMiddleware,
+  checkViewerAccess,
+  documentController.getAllDocuments
+);
+
+// Route to retrieve all documents across all indices with optional pagination (only accessible by admin)
+router.get(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getAllDocumentsAcrossIndices
+);
+
 module.exports = router;

@@ -302,7 +302,7 @@ exports.searchAllDocuments = async (req, res) => {
 exports.getAllDocuments = async (req, res) => {
   const indexName = req.params.indexName.toLowerCase();
   const from = parseInt(req.query.from, 10) || 0; // Default to 0 if not provided
-  const size = parseInt(req.query.size, 10) || 100000; // Default to 10 if not provided
+  const size = parseInt(req.query.size, 10) || 10000; // Default to 10 if not provided
 
   try {
     // Construct the search query to match all documents
@@ -337,7 +337,7 @@ exports.getAllDocuments = async (req, res) => {
 // Controller to retrieve all documents across all indices
 exports.getAllDocumentsAcrossIndices = async (req, res) => {
   const from = parseInt(req.query.from, 10) || 0; // Default to 0 if not provided
-  const size = parseInt(req.query.size, 10) || 1000000; // Default to 10 if not provided
+  const size = parseInt(req.query.size, 10) || 10000; // Default to 10 if not provided
 
   try {
     // Construct the search query to match all documents across all indices

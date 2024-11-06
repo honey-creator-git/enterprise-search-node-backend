@@ -14,22 +14,6 @@ router.post(
   documentController.addDocument
 );
 
-// Route to get all documents from an index (accessible by all roles)
-router.get(
-  "/:indexName/get-all-documents",
-  setRoleMiddleware,
-  checkViewerAccess,
-  documentController.getAllDocuments
-);
-
-// Route to retrieve all documents across all indices with optional pagination (only accessible by admin)
-router.get(
-  "/get-all-documents-across-indices",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.getAllDocumentsAcrossIndices
-);
-
 // Route for NLP / Semantic Search
 router.post(
   "/semantic/:indexName",
