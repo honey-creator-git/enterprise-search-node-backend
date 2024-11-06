@@ -1,5 +1,5 @@
 const checkViewerAccess = (req, res, next) => {
-  if (req.userRole !== "Viewer" && req.userRole !== "Admin") {
+  if (req.userPermission !== "ESS" && req.userRole !== "Admin") {
     return res.status(403).send("Access denied");
   }
   next();

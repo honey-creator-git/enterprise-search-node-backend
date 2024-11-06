@@ -7,7 +7,7 @@ const checkAdminAccess = require("../../middleware/checkAdminAccess");
 const checkViewerAccess = require("../../middleware/checkViewerAccess");
 const router = express.Router();
 
-// Route to create a new index (only accessible by admin and manager)
+// Route to create a new index (only accessible by admin)
 router.post(
   "/",
   setRoleMiddleware,
@@ -31,7 +31,7 @@ router.get(
   indexController.listIndices
 );
 
-// Route to update index settings (only accessible by admin and manager)
+// Route to update index settings (only accessible by admin)
 router.put(
   "/:indexName",
   setRoleMiddleware,
@@ -39,6 +39,7 @@ router.put(
   indexController.updateIndexSettings
 );
 
+// Route to update index settings (only accessible by admin)
 router.get(
   "/:newIndex/:oldIndex",
   setRoleMiddleware,
@@ -54,7 +55,7 @@ router.get(
   documentController.getDocument
 );
 
-// Route to delete a document by ID from an index (only accessible by admin and manager)
+// Route to delete a document by ID from an index (only accessible by admin)
 router.delete(
   "/:indexName/document/:documentId",
   setRoleMiddleware,
@@ -62,7 +63,7 @@ router.delete(
   documentController.deleteDocument
 );
 
-// Route to update a document by ID from an index (accessible by admin, manager, and editor)
+// Route to update a document by ID from an index (accessible by admin)
 router.put(
   "/:indexName/document/:documentId",
   setRoleMiddleware,

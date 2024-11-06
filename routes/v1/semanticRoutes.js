@@ -6,8 +6,7 @@ const checkAdminAccess = require("../../middleware/checkAdminAccess");
 const checkViewerAccess = require("../../middleware/checkViewerAccess");
 const router = express.Router();
 
-
-// Route for NLP / Semantic Search
+// Route for NLP / Semantic Search (accessible by all roles)
 router.post(
   "/:indexName",
   setRoleMiddleware,
