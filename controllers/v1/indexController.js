@@ -2,7 +2,7 @@ const client = require("../../config/elasticsearch");
 
 // Controller to create a new index
 exports.createIndex = async (req, res) => {
-  const indexName = req.body.indexName || "coid";
+  const indexName = req.body.indexName.toLowerCase() || "coid";
 
   try {
     // Check if the index already exists
@@ -49,7 +49,7 @@ exports.createIndex = async (req, res) => {
 
 // Controller to delete an index
 exports.deleteIndex = async (req, res) => {
-  const indexName = req.params.indexName; // Get the index name from the URL parameter
+  const indexName = req.params.indexName.toLowerCase(); // Get the index name from the URL parameter
 
   console.log("Index Name => ", indexName);
 
@@ -118,7 +118,7 @@ exports.listIndices = async (req, res) => {
 
 // Controller to update index settings
 exports.updateIndexSettings = async (req, res) => {
-  const indexName = req.params.indexName; // Get index name from URL parameters
+  const indexName = req.params.indexName.toLowerCase(); // Get index name from URL parameters
   const settings = req.body.settings; // Settings to update, passed in the request body
 
   try {

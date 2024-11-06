@@ -1,8 +1,11 @@
 const client = require("../../config/elasticsearch");
+const generateEmbedding = require("../../embedding").generateEmbedding;
+const semanticSearchService =
+  require("../../services/v1/semantic-search").semanticSearch;
 
 // Controller to add a new document to an index
 exports.addDocument = async (req, res) => {
-  const indexName = req.params.indexName; // Get the index name from the URL parameter
+  const indexName = req.params.indexName.toLowerCase(); // Get the index name from the URL parameter
   const document = req.body; // Get the document data from the request body
 
   try {
@@ -58,7 +61,7 @@ exports.addDocument = async (req, res) => {
 
 // Controller to retrieve a document by ID from an index
 exports.getDocument = async (req, res) => {
-  const indexName = req.params.indexName;
+  const indexName = req.params.indexName.toLowerCase();
   const documentId = req.params.documentId;
 
   try {
@@ -82,7 +85,7 @@ exports.getDocument = async (req, res) => {
 
 // Controller to update an existing document in an index
 exports.updateDocument = async (req, res) => {
-  const indexName = req.params.indexName;
+  const indexName = req.params.indexName.toLowerCase();
   const documentId = req.params.documentId;
   const updatedFields = req.body;
 
@@ -121,7 +124,7 @@ exports.updateDocument = async (req, res) => {
 
 // Controller to delete a document by ID from an index
 exports.deleteDocument = async (req, res) => {
-  const indexName = req.params.indexName;
+  const indexName = req.params.indexName.toLowerCase();
   const documentId = req.params.documentId;
 
   try {
@@ -145,7 +148,7 @@ exports.deleteDocument = async (req, res) => {
 
 // Controller to search documents with various filters and query options
 exports.searchDocuments = async (req, res) => {
-  const indexName = req.params.indexName;
+  const indexName = req.params.indexName.toLowerCase();
   const { keyword, query, fuzziness = "AUTO" } = req.body;
 
   try {
@@ -297,7 +300,7 @@ exports.searchAllDocuments = async (req, res) => {
 
 // Controller to retrieve all documents from a specified index
 exports.getAllDocuments = async (req, res) => {
-  const indexName = req.params.indexName;
+  const indexName = req.params.indexName.toLowerCase();
   const from = parseInt(req.query.from, 10) || 0; // Default to 0 if not provided
   const size = parseInt(req.query.size, 10) || 10; // Default to 10 if not provided
 
@@ -367,5 +370,29 @@ exports.getAllDocumentsAcrossIndices = async (req, res) => {
       error: "Failed to retrieve documents",
       details: error.message,
     });
+  }
+};
+
+exports.semanticSearch = async (req, res) => {
+  const query = req.body.query;
+  const indexName = req.params.indexName.toLowerCase();
+
+  console.log("Query => ", query);
+  console.log("Index Name => ", indexName);
+  try {
+    // Generate embedding for the query text
+    generateEmbedding(query).then((res) => {
+      console.log("Query Embedding => ", res);
+    });
+
+    // Perform semantic search in Elasticsearch
+    // const results = await semanticSearchService(
+    //   "index_" + indexName + "_documents",
+    //   queryEmbedding
+    // );
+    // res.send(results);
+  } catch (error) {
+    console.error("Semantic search failed:", error);
+    res.status(500).send({ error: "Semantic search failed" });
   }
 };

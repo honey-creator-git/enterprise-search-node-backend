@@ -70,4 +70,12 @@ router.get(
   documentController.getAllDocumentsAcrossIndices
 );
 
+// Route for NLP / Semantic Search
+router.post(
+  "/semantic/:indexName",
+  setRoleMiddleware,
+  checkViewerAccess,
+  documentController.semanticSearch
+);
+
 module.exports = router;
