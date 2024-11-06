@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Route to create a new index (only accessible by admin and manager)
 router.post(
-  "/create-index",
+  "/",
   setRoleMiddleware,
   checkAdminAccess,
   indexController.createIndex

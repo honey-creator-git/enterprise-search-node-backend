@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json()); // Middleware to parse JSON request bodies
 
 // Use index routes
-app.use("/api/v1/index", indexRoutes);
+app.use("/api/v1/tenant", indexRoutes);
 
 // Use document routes
 app.use("/api/v1/document", documentRoutes);
