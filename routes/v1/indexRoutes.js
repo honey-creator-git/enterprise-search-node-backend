@@ -24,7 +24,7 @@ router.delete(
 
 // Route to list all indices (accessible by all roles)
 router.get(
-  "/list",
+  "/all",
   setRoleMiddleware,
   checkViewerAccess,
   indexController.listIndices
