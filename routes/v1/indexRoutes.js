@@ -70,4 +70,12 @@ router.put(
   documentController.updateDocument
 );
 
+// Route to search documents across all indices (only accessible by admin)
+router.post(
+  "/search-all",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.searchAllDocuments
+);
+
 module.exports = router;

@@ -22,14 +22,6 @@ router.post(
   documentController.searchDocuments
 );
 
-// Route to search documents across all indices (only accessible by admin)
-router.post(
-  "/search-all",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.searchAllDocuments
-);
-
 // Route to get all documents from an index (accessible by all roles)
 router.get(
   "/:indexName/get-all-documents",
