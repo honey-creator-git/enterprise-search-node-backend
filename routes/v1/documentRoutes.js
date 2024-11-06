@@ -14,14 +14,6 @@ router.post(
   documentController.addDocument
 );
 
-// Route to retrieve a document by ID from an index (accessible by all roles)
-router.get(
-  "/:indexName/get-document/:documentId",
-  setRoleMiddleware,
-  checkViewerAccess,
-  documentController.getDocument
-);
-
 // Route to update a document by ID from an index (accessible by admin, manager, and editor)
 router.put(
   "/:indexName/update-document/:documentId",
