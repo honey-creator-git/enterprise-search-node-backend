@@ -21,7 +21,21 @@ async function generateEmbedding(text) {
     }
   );
 
-  return response.data.embedding;
+  console.log("Full response from API:", response.data);
+
+  const embedding = response.data;
+
+  // Check if embedding has the expected 768 dimensions
+  if (Array.isArray(embedding) && embedding.length === 768) {
+    return embedding;
+  } else {
+    console.error(
+      "Error: Embedding dimension mismatch or unexpected response structure."
+    );
+    throw new Error(
+      "Embedding dimension mismatch or unexpected response structure"
+    );
+  }
 }
 
 // Function to update document with embeddings
