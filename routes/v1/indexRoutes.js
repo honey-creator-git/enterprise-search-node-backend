@@ -39,7 +39,7 @@ router.put(
 );
 
 router.get(
-  "/reindex/:newIndex/:oldIndex/:aliasName",
+  "/:newIndex/:oldIndex",
   setRoleMiddleware,
   checkAdminAccess,
   indexController.reindexIndices

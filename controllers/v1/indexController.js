@@ -145,9 +145,9 @@ exports.updateIndexSettings = async (req, res) => {
 
 // Controller to reindex
 exports.reindexIndices = async (req, res) => {
-  const newIndex1 = req.params.newIndex;
-  const oldIndex1 = req.params.oldIndex;
-  const aliasName1 = req.params.aliasName;
+  const newIndex1 = "index_" + req.params.newIndex.toLowerCase() + "_documents";
+  const oldIndex1 = "index_" + req.params.oldIndex.toLowerCase() + "_documents";
+  const aliasName1 = "index_" + req.params.newIndex.toLowerCase() + "_alias";
 
   try {
     // Step 1: Create a new index
