@@ -94,13 +94,17 @@ exports.listIndices = async (req, res) => {
     console.log("Response for list indices => ", response);
 
     // Extract necessary details (e.g., index name, health, status, document count)
-    const indices = response.map((index) => ({
-      index: index.index,
-      health: index.health,
-      status: index.status,
-      documentCount: index["docs.count"],
-      storeSize: index["store.size"],
-    }));
+    const indices = response.filter((index) => {
+      if (index.index.includes("index_")) {
+        return {
+          index: index.index,
+          health: index.health,
+          status: index.status,
+          documentCount: index["docs.count"],
+          storeSize: index["store.size"],
+        };
+      }
+    });
 
     res.status(200).json({
       message: "List of all indices",

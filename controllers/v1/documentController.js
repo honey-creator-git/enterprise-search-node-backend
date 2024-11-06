@@ -1,7 +1,8 @@
 const client = require("../../config/elasticsearch");
+const axios = require("axios");
+const searchClient = require("../../config/cognitivesearch");
 const generateEmbedding = require("../../embedding").generateEmbedding;
-const semanticSearchService =
-  require("../../services/v1/semantic-search").semanticSearch;
+require("dotenv").config();
 
 // Controller to add a new document to an index
 exports.addDocument = async (req, res) => {
@@ -394,5 +395,172 @@ exports.semanticSearch = async (req, res) => {
   } catch (error) {
     console.error("Semantic search failed:", error);
     res.status(500).send({ error: "Semantic search failed" });
+  }
+};
+
+exports.syncElasticSearchAzureAiSearch = async (req, res) => {
+  const indexName = req.params.indexName.toLowerCase();
+  const from = 0;
+  const size = 10000;
+
+  try {
+    // Construct the search query to match all documents
+    const searchQuery = {
+      index: "index_" + indexName + "_documents",
+      body: {
+        query: {
+          match_all: {},
+        },
+      },
+      from,
+      size,
+    };
+
+    // Execut the search query
+    const response = await client.search(searchQuery);
+
+    if (response.hits.hits.length > 0) {
+      console.log(
+        `Fetched ${response.hits.hits.length} documents from Elasticsearch`
+      );
+
+      const docs = response.hits.hits.map((hit) => ({
+        "@search.action": "upload", // Required action for Azure Search API
+        id: hit._id, // Primary key in your Azure index
+        title: hit._source.title, // Example field - adjust as per your schema
+        description: hit._source.description,
+        content: hit._source.content,
+        image: hit._source.image,
+      }));
+
+      if (docs.length > 0) {
+        const batch = docs.map((doc) => ({
+          ...doc,
+          "@search.action": "upload", // Ensures Azure Search treats this as an upload operation
+        }));
+
+        const resultOf = await searchClient.uploadDocuments(batch);
+        console.log(
+          `Uploaded ${batch.length} documents to Azure Search`,
+          resultOf
+        );
+
+        res.status(200).json({
+          message: `Fetched documents from index ${indexName} and stored to azure AI index ${process.env.AZURE_SEARCH_INDEX_NAME}.`,
+          total: response.hits.total.value,
+          documents: response.hits.hits.map((hit) => hit._source), // Return only document sources
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error retrieving document: ", error);
+    res.status(500).json({
+      error: "Failed to retrieve document",
+      details: error.message,
+    });
+  }
+};
+
+exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
+  let filter = "";
+  let filter_of_title = "";
+  let filter_of_description = "";
+  let filter_of_content = "";
+  const query = req.body.query;
+  const title = req.body.title ? req.body.title : "";
+  const description = req.body.description ? req.body.description : "";
+  const content = req.body.content ? req.body.content : "";
+
+  console.log("Title => ", req.body.title);
+  console.log("Content => ", req.body.content);
+  console.log("Description => ", req.body.description);
+
+  if (title.length !== 0) {
+    filter_of_title = `title eq '${title}'`;
+  }
+
+  if (description.length !== 0) {
+    filter_of_description = `description eq '${description}'`;
+  }
+
+  if (content.length !== 0) {
+    filter_of_content = `content eq '${content}'`;
+  }
+
+  if (
+    filter_of_title.length !== 0 &&
+    filter_of_description.length === 0 &&
+    filter_of_content.length === 0
+  ) {
+    filter = filter_of_title;
+  } else if (
+    filter_of_title.length === 0 &&
+    filter_of_description.length !== 0 &&
+    filter_of_content === 0
+  ) {
+    filter = filter_of_description;
+  } else if (
+    filter_of_title.length === 0 &&
+    filter_of_description.length === 0 &&
+    filter_of_content !== 0
+  ) {
+    filter = filter_of_content;
+  } else if (
+    filter_of_title.length !== 0 &&
+    filter_of_description.length !== 0 &&
+    filter_of_content.length === 0
+  ) {
+    filter = `${filter_of_title} and ${filter_of_description}`;
+  } else if (
+    filter_of_title.length === 0 &&
+    filter_of_description.length !== 0 &&
+    filter_of_content.length !== 0
+  ) {
+    filter = `${filter_of_description} and ${filter_of_content}`;
+  } else if (
+    filter_of_title.length !== 0 &&
+    filter_of_description.length === 0 &&
+    filter_of_content.length !== 0
+  ) {
+    filter = `${filter_of_title} and ${filter_of_content}`;
+  } else if (
+    filter_of_title.length !== 0 &&
+    filter_of_description.length !== 0 &&
+    filter_of_content.length !== 0
+  ) {
+    filter = `${filter_of_title} and ${filter_of_description} and ${filter_of_content}`;
+  }
+
+  try {
+    const response = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${process.env.AZURE_SEARCH_INDEX_NAME}/docs/search?api-version=2021-04-30-Preview`,
+      {
+        search: query, // The search query
+        filter: filter, // Add filter query here
+        searchMode: "any", // Allows matching on any term within the query
+        queryType: "simple", // Enables full query parsing for complex queries
+        top: 10, // Number of results to return
+        count: true, // Return count of results
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    console.log("Documents retrieved:", response.data);
+    res.status(200).json({
+      message: `Fetched documents from Azure AI Service ${process.env.AZURE_SEARCH_INDEX_NAME}.`,
+      total: response.data.value.length,
+      documents: response.data, // Return only document sources
+    });
+  } catch (error) {
+    console.error(
+      "Error retrieving documents:",
+      error.response ? error.response.data : error.message
+    );
+    throw error;
   }
 };

@@ -6,12 +6,13 @@ const checkAdminAccess = require("../../middleware/checkAdminAccess");
 const checkViewerAccess = require("../../middleware/checkViewerAccess");
 const router = express.Router();
 
-// Route to retieve all documents from an index and store them in Azure Cognitive Search Service index
-router.get(
-  "/sync/:indexName",
+
+// Route for NLP / Semantic Search
+router.post(
+  "/",
   setRoleMiddleware,
-  checkAdminAccess,
-  documentController.syncElasticSearchAzureAiSearch
+  checkViewerAccess,
+  documentController.searchDocumentsFromAzureAIIndex
 );
 
 module.exports = router;

@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const indexRoutes = require("./routes/v1/indexRoutes");
 const documentRoutes = require("./routes/v1/documentRoutes");
+const semanticRoutes = require("./routes/v1/semanticRoutes");
 
 dotenv.config();
 
@@ -13,6 +14,9 @@ app.use("/api/v1/tenant", indexRoutes);
 
 // Use document routes
 app.use("/api/v1/document", documentRoutes);
+
+// Use semantic search routes
+app.use("/api/v1/semantic", semanticRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;

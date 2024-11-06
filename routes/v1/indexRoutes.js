@@ -25,7 +25,7 @@ router.delete(
 
 // Route to list all indices (accessible by all roles)
 router.get(
-  "/all",
+  "/",
   setRoleMiddleware,
   checkViewerAccess,
   indexController.listIndices
@@ -100,6 +100,14 @@ router.get(
   setRoleMiddleware,
   checkAdminAccess,
   documentController.getAllDocumentsAcrossIndices
+);
+
+// Route to add a new document to an index (accessible by admin, manager, and editor)
+router.post(
+  "/:indexName",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.addDocument
 );
 
 module.exports = router;
