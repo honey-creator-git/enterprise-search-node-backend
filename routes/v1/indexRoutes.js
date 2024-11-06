@@ -62,4 +62,12 @@ router.delete(
   documentController.deleteDocument
 );
 
+// Route to update a document by ID from an index (accessible by admin, manager, and editor)
+router.put(
+  "/:indexName/document/:documentId",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.updateDocument
+);
+
 module.exports = router;

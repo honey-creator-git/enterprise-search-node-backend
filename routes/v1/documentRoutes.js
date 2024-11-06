@@ -14,14 +14,6 @@ router.post(
   documentController.addDocument
 );
 
-// Route to update a document by ID from an index (accessible by admin, manager, and editor)
-router.put(
-  "/:indexName/update-document/:documentId",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.updateDocument
-);
-
 // Route to search documents with keyword and advanced query support (accessible by all roles)
 router.post(
   "/:indexName/search",
