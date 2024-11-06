@@ -72,12 +72,12 @@ router.put(
 );
 
 // Route to search documents across all indices (only accessible by admin)
-router.post(
-  "/search-all",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.searchAllDocuments
-);
+// router.post(
+//   "/search-all",
+//   setRoleMiddleware,
+//   checkAdminAccess,
+//   documentController.searchAllDocuments
+// );
 
 // Route to search documents with keyword and advanced query support (accessible by all roles)
 router.post(
