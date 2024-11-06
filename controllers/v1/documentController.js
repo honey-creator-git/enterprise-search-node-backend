@@ -1,21 +1,42 @@
+const {
+  SearchClient,
+  SearchIndexClient,
+  AzureKeyCredential,
+} = require("@azure/search-documents");
+const generateEmbedding = require("../../embedding").generateEmbedding;
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
-const searchClient = require("../../config/cognitivesearch");
-const generateEmbedding = require("../../embedding").generateEmbedding;
 require("dotenv").config();
+
+const searchClient = new SearchClient(
+  process.env.AZURE_SEARCH_ENDPOINT,
+  process.env.AZURE_SEARCH_INDEX_NAME,
+  new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+);
+
+const searchIndexClient = new SearchIndexClient(
+  process.env.AZURE_SEARCH_ENDPOINT,
+  new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+);
 
 // Controller to add a new document to an index
 exports.addDocument = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase(); // Get the index name from the URL parameter
+  const indexName = req.params.indexName?.toLowerCase(); // Get the index name from the URL parameter
   const document = req.body; // Get the document data from the request body
+
+  const searchClientForNewDocument = new SearchClient(
+    process.env.AZURE_SEARCH_ENDPOINT,
+    indexName,
+    new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+  );
 
   try {
     // Check if the nidex exists before attempting to add a document
-    const exists = await client.indices.exists({
+    const esExists = await client.indices.exists({
       index: indexName,
     });
 
-    if (!exists) {
+    if (!esExists) {
       await client.indices.create({
         index: indexName,
         body: {
@@ -33,23 +54,86 @@ exports.addDocument = async (req, res) => {
           },
         },
       });
-      // return res.status(404).json({
-      //   message: `Index "index_${indexName}_documents" does not exists.`,
-      // });
+    }
+
+    // Check if the Azure Cognitive Search index exists
+    const azExists = await searchIndexClient
+      .getIndex(indexName)
+      .catch(() => null);
+
+    if (!azExists) {
+      // Define Azure Cognitive Search index schema
+      const indexSchema = {
+        name: indexName,
+        fields: [
+          { name: "id", type: "Edm.String", key: true, searchable: false },
+          {
+            name: "title",
+            type: "Edm.String",
+            searchable: true,
+            filterable: true,
+            sortable: true,
+          },
+          {
+            name: "description",
+            type: "Edm.String",
+            searchable: true,
+            filterable: true,
+            sortable: true,
+          },
+          {
+            name: "content",
+            type: "Edm.String",
+            searchable: true,
+            filterable: true,
+            sortable: true,
+          },
+          {
+            name: "image",
+            type: "Edm.String",
+            searchable: true,
+            filterable: false,
+            sortable: false,
+          },
+        ],
+        semantic: {
+          configurations: [
+            {
+              name: "es-semantic-config",
+              prioritizedFields: {
+                titleField: { fieldName: "title" },
+                prioritizedContentFields: [
+                  { fieldName: "description" },
+                  { fieldName: "content" },
+                ],
+              },
+            },
+          ],
+        },
+      };
+
+      await searchIndexClient.createIndex(indexSchema);
     }
 
     // Add the document to the specified index
-    const response = await client.index({
+    const esResponse = await client.index({
       index: indexName,
       body: document,
     });
 
-    console.log("Response => ", response);
+    console.log("Response => ", esResponse);
+
+    // Add the document to Azure Cognitive Search
+    const azDocument = {
+      ...document,
+      id: esResponse._id, // Assign Elasticsearch document ID as the Azure document ID
+    };
+    const azResponse = await searchClientForNewDocument.uploadDocuments([azDocument]);
 
     res.status(201).json({
-      message: `Document added to index ${indexName} successfully.`,
-      documentId: response._id,
-      response: response,
+      message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
+      elasticsearchResponse: esResponse,
+      azureResponse: azResponse,
     });
   } catch (error) {
     console.error("Error adding document: ", error);
@@ -62,7 +146,7 @@ exports.addDocument = async (req, res) => {
 
 // Controller to retrieve a document by ID from an index
 exports.getDocument = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
   const documentId = req.params.documentId;
 
   try {
@@ -86,7 +170,7 @@ exports.getDocument = async (req, res) => {
 
 // Controller to update an existing document in an index
 exports.updateDocument = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
   const documentId = req.params.documentId;
   const updatedFields = req.body;
 
@@ -125,7 +209,7 @@ exports.updateDocument = async (req, res) => {
 
 // Controller to delete a document by ID from an index
 exports.deleteDocument = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
   const documentId = req.params.documentId;
 
   try {
@@ -149,7 +233,7 @@ exports.deleteDocument = async (req, res) => {
 
 // Controller to search documents with various filters and query options
 exports.searchDocuments = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
   const { keyword, query, fuzziness = "AUTO" } = req.body;
 
   try {
@@ -301,7 +385,7 @@ exports.searchAllDocuments = async (req, res) => {
 
 // Controller to retrieve all documents from a specified index
 exports.getAllDocuments = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
   const from = parseInt(req.query.from, 10) || 0; // Default to 0 if not provided
   const size = parseInt(req.query.size, 10) || 10000; // Default to 10 if not provided
 
@@ -376,7 +460,7 @@ exports.getAllDocumentsAcrossIndices = async (req, res) => {
 
 exports.semanticSearch = async (req, res) => {
   const query = req.body.query;
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
 
   console.log("Query => ", query);
   console.log("Index Name => ", indexName);
@@ -399,7 +483,7 @@ exports.semanticSearch = async (req, res) => {
 };
 
 exports.syncElasticSearchAzureAiSearch = async (req, res) => {
-  const indexName = req.params.indexName.toLowerCase();
+  const indexName = req.params.indexName?.toLowerCase();
   const from = 0;
   const size = 10000;
 
