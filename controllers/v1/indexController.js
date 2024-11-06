@@ -122,8 +122,6 @@ exports.createIndex = async (req, res) => {
 exports.deleteIndex = async (req, res) => {
   const indexName = req.params.indexName?.toLowerCase(); // Get the index name from the URL parameter
 
-  console.log("Index Name => ", indexName);
-
   try {
     // Check if the index exists
     const exists = await client.indices.exists({
@@ -161,8 +159,6 @@ exports.listIndices = async (req, res) => {
     const response = await client.cat.indices({
       format: "json",
     });
-
-    console.log("Response for list indices => ", response);
 
     // Extract necessary details (e.g., index name, health, status, document count)
     const indices = response.filter((index) => {
@@ -226,7 +222,6 @@ exports.reindexIndices = async (req, res) => {
 
   try {
     // Step 1: Create a new index
-    console.log("Creating new index...");
     const indexConfig = {
       mappings: {
         properties: {
@@ -246,10 +241,7 @@ exports.reindexIndices = async (req, res) => {
       body: indexConfig,
     });
 
-    console.log("New Index Created: ", response);
-
     // Step 2: Reindex documents from old index to new index
-    console.log("Reindexing documents...");
     const sourceIndex = oldIndex1;
     const destinationIndex = newIndex1;
 
@@ -264,26 +256,19 @@ exports.reindexIndices = async (req, res) => {
       },
     });
 
-    console.log("Reindexing Completed: ", responseForReindex);
-
     // Step 3: Delete the old index
-    console.log("Deleting old index...");
     const oldIndex = oldIndex1;
     const responseForDeletingOldIndex = await client.indices.delete({
       index: oldIndex,
     });
 
-    console.log("Old Index Deleted: ", responseForDeletingOldIndex);
-
     // Step 4: Create alias for new index
-    console.log("Creating alias...");
     const aliasName = aliasName1;
     const newIndex = newIndex1;
     const responseForAlias = await client.indices.putAlias({
       index: newIndex,
       name: aliasName,
     });
-    console.log("Alias Created: ", responseForAlias);
 
     res.status(200).send("Reindexing completed successfully!");
   } catch (error) {

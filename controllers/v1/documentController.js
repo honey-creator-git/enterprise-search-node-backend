@@ -121,8 +121,6 @@ exports.addDocument = async (req, res) => {
       body: document,
     });
 
-    console.log("Response => ", esResponse);
-
     // Add the document to Azure Cognitive Search
     const azDocument = {
       ...document,
@@ -313,18 +311,21 @@ exports.searchDocuments = async (req, res) => {
     // Execute the search query
     const response = await client.search(searchQuery);
 
+    const filtered_documents = response.hits.hits.filter((hit) =>
+      hit._index.includes("index_")
+    );
+
     res.status(200).json({
       message: "Search completed successfully",
       total: response.hits.total.value,
-      results: response.hits.hits.filter((hit) => {
-        if (hit._index.includes("index_")) {
-          return {
-            index: hit._index, // Include the index name for each document
-            id: hit._id, // Include the document ID
-            source: hit._source, // Document source data
-          };
-        }
-      }), // Return only document sources
+      results: filtered_documents.map((doc) => ({
+        index: doc._index, // Include the index name for each document
+        id: doc._id, // Include the document ID
+        title: doc._source.title,
+        description: doc._source.description,
+        content: doc._source.content,
+        image: doc._source.image,
+      })),
     });
   } catch (error) {
     console.error("Error performing search: ", error);
@@ -421,18 +422,20 @@ exports.searchAllDocuments = async (req, res) => {
     // Execute the search query
     const response = await client.search(searchQuery);
 
+    const filtered_documents = response.hits.hits.filter((hit) =>
+      hit._index.includes("index_")
+    );
+
     res.status(200).json({
       message: "Search across all indices completed successfully",
-      total: response.hits.total.value,
-      results: response.hits.hits.filter((hit) => {
-        if (hit._index.includes("index_")) {
-          return {
-            index: hit._index, // Include the index name for each document
-            id: hit._id, // Include the document ID
-            source: hit._source, // Document source data
-          };
-        }
-      }), // Return only document sources
+      results: filtered_documents.map((doc) => ({
+        index: doc._index, // Include the index name for each document
+        id: doc._id, // Include the document ID
+        title: doc._source.title,
+        description: doc._source.description,
+        content: doc._source.content,
+        image: doc._source.image,
+      })),
     });
   } catch (error) {
     console.error("Error performing search across all indices: ", error);
@@ -472,7 +475,10 @@ exports.getAllDocuments = async (req, res) => {
         return {
           index: hit._index, // Include the index name for each document
           id: hit._id, // Include the document ID
-          source: hit._source, // Document source data
+          title: hit._source.title,
+          description: hit._source.description,
+          content: hit._source.content,
+          image: hit._source.image,
         };
       }), // Return only document sources
     });
@@ -506,18 +512,20 @@ exports.getAllDocumentsAcrossIndices = async (req, res) => {
     // Execute the search query
     const response = await client.search(searchQuery);
 
+    const filtered_documents = response.hits.hits.filter((hit) =>
+      hit._index.includes("index_")
+    );
+
     res.status(200).json({
       message: "Retrieved documents from all indices.",
-      total: response.hits.total.value,
-      documents: response.hits.hits.filter((hit) => {
-        if (hit._index.includes("index_")) {
-          return {
-            index: hit._index, // Include the index name for each document
-            id: hit._id, // Include the document ID
-            source: hit._source, // Document source data
-          };
-        }
-      }),
+      documents: filtered_documents.map((doc) => ({
+        index: doc._index, // Include the index name for each document
+        id: doc._id, // Include the document ID
+        title: doc._source.title,
+        description: doc._source.description,
+        content: doc._source.content,
+        image: doc._source.image,
+      })),
     });
   } catch (error) {
     console.error("Error retrieving documents across all indices: ", error);
@@ -525,30 +533,6 @@ exports.getAllDocumentsAcrossIndices = async (req, res) => {
       error: "Failed to retrieve documents",
       details: error.message,
     });
-  }
-};
-
-exports.semanticSearch = async (req, res) => {
-  const query = req.body.query;
-  const indexName = req.params.indexName?.toLowerCase();
-
-  console.log("Query => ", query);
-  console.log("Index Name => ", indexName);
-  try {
-    // Generate embedding for the query text
-    generateEmbedding(query).then((res) => {
-      console.log("Query Embedding => ", res);
-    });
-
-    // Perform semantic search in Elasticsearch
-    // const results = await semanticSearchService(
-    //   "index_" + indexName + "_documents",
-    //   queryEmbedding
-    // );
-    // res.send(results);
-  } catch (error) {
-    console.error("Semantic search failed:", error);
-    res.status(500).send({ error: "Semantic search failed" });
   }
 };
 
@@ -574,10 +558,6 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
     const response = await client.search(searchQuery);
 
     if (response.hits.hits.length > 0) {
-      console.log(
-        `Fetched ${response.hits.hits.length} documents from Elasticsearch`
-      );
-
       const docs = response.hits.hits.map((hit) => ({
         "@search.action": "upload", // Required action for Azure Search API
         id: hit._id, // Primary key in your Azure index
@@ -594,10 +574,6 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
         }));
 
         const resultOf = await searchClient.uploadDocuments(batch);
-        console.log(
-          `Uploaded ${batch.length} documents to Azure Search`,
-          resultOf
-        );
 
         res.status(200).json({
           message: `Fetched documents from index ${indexName} and stored to azure AI index ${process.env.AZURE_SEARCH_INDEX_NAME}.`,
@@ -625,10 +601,6 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   const title = req.body.title ? req.body.title : "";
   const description = req.body.description ? req.body.description : "";
   const content = req.body.content ? req.body.content : "";
-
-  console.log("Title => ", req.body.title);
-  console.log("Content => ", req.body.content);
-  console.log("Description => ", req.body.description);
 
   if (title.length !== 0) {
     filter_of_title = `title eq '${title}'`;
@@ -704,8 +676,6 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         },
       }
     );
-
-    console.log("Documents retrieved:", response.data);
     res.status(200).json({
       message: `Fetched documents from Azure AI Service ${process.env.AZURE_SEARCH_INDEX_NAME}.`,
       total: response.data.value.length,

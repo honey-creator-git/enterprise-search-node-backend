@@ -21,8 +21,6 @@ async function generateEmbedding(text) {
     }
   );
 
-  console.log("Full response from API:", response.data);
-
   const embedding = response.data;
 
   // Check if embedding has the expected 768 dimensions
@@ -42,10 +40,6 @@ async function generateEmbedding(text) {
 async function updateDocumentWithEmbeddings(document) {
   const { _id, _source } = document;
   const { title, content, description } = _source;
-
-  console.log("Title => ", title);
-  console.log("Content => ", content);
-  console.log("Description => ", description);
 
   const titleEmbedding = await generateEmbedding(title);
   const contentEmbedding = await generateEmbedding(content);
@@ -75,9 +69,7 @@ async function updateAllDocuments() {
   const documents = body.hits.hits;
   for (const doc of documents) {
     await updateDocumentWithEmbeddings(doc);
-    console.log(`Updated document with ID: ${doc._id}`);
   }
-  console.log("All documents updated with embeddings");
 }
 
 // updateAllDocuments().catch(console.error);
