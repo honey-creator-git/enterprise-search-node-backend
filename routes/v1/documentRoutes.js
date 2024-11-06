@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Route to add a new document to an index (accessible by admin, manager, and editor)
 router.post(
-  "/:indexName/add-document",
+  "/:indexName",
   setRoleMiddleware,
   checkAdminAccess,
   documentController.addDocument
