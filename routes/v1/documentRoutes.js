@@ -22,14 +22,6 @@ router.put(
   documentController.updateDocument
 );
 
-// Route to delete a document by ID from an index (only accessible by admin and manager)
-router.delete(
-  "/:indexName/delete-document/:documentId",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.deleteDocument
-);
-
 // Route to search documents with keyword and advanced query support (accessible by all roles)
 router.post(
   "/:indexName/search",

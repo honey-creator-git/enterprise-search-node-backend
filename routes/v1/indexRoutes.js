@@ -54,4 +54,12 @@ router.get(
   documentController.getDocument
 );
 
+// Route to delete a document by ID from an index (only accessible by admin and manager)
+router.delete(
+  "/:indexName/document/:documentId",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.deleteDocument
+);
+
 module.exports = router;
