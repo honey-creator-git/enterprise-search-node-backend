@@ -32,7 +32,7 @@ router.get(
 
 // Route to update index settings (only accessible by admin and manager)
 router.put(
-  "/update-settings/:indexName",
+  "/:indexName",
   setRoleMiddleware,
   checkAdminAccess,
   indexController.updateIndexSettings
