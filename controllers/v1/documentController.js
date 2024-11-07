@@ -311,8 +311,8 @@ exports.searchDocuments = async (req, res) => {
     // Execute the search query
     const response = await client.search(searchQuery);
 
-    const filtered_documents = response.hits.hits.filter((hit) =>
-      hit._index.includes("index_")
+    const filtered_documents = response.hits.hits.filter(
+      (hit) => hit._index === indexName
     );
 
     res.status(200).json({
