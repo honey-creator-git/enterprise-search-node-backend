@@ -233,7 +233,6 @@ exports.deleteDocument = async (req, res) => {
 
 // Controller to search documents with various filters and query options
 exports.searchDocuments = async (req, res) => {
-  console.log("User Role => ", req.userRole);
   const indexName = req.params.indexName?.toLowerCase();
   const { keyword, query, fuzziness = "AUTO" } = req.body;
   const from = 0; // Default to 0 if not provided
@@ -243,7 +242,7 @@ exports.searchDocuments = async (req, res) => {
   try {
     // Construct the search query
     searchQuery = {
-      index: req.userRole === "Admin" ? "*" : indexName,
+      index: indexName,
       body: {
         query: {
           bool: {
