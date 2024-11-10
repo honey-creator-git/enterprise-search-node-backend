@@ -247,8 +247,8 @@ exports.searchDocuments = async (req, res) => {
       index: "category-user",
       body: {
         query: {
-          term: {
-            user: req.userId, // Match the userId in the category-user index
+          wildcard: {
+            user: `*${req.userId}*`, // Match the userId in the category-user index
           },
         },
       },
@@ -710,5 +710,41 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       error.response ? error.response.data : error.message
     );
     throw error;
+  }
+};
+
+// Controller to retrive all categories with user id
+exports.getUserCategories = async (req, res) => {
+  const userId = req.params.userId; // User ID from the request
+
+  try {
+    // Search in the "category-user" index for categories that include the userId
+    const categoryResponse = await client.search({
+      index: "category-user",
+      body: {
+        query: {
+          wildcard: {
+            user: `*${userId}*`, // Match userId within the comma-separated "user" field
+          },
+        },
+      },
+    });
+
+    // Extract the categories from the search response
+    const userCategories = categoryResponse.hits.hits.map(
+      (hit) => hit._source.category
+    );
+
+    // Return the categories associated with the user
+    res.status(200).json({
+      message: `Categories for user ${userId} retrieved successfully`,
+      categories: userCategories,
+    });
+  } catch (error) {
+    console.error("Error retrieving user categories: ", error);
+    res.status(500).json({
+      error: "Failed to retrieve categories",
+      details: error.message,
+    });
   }
 };

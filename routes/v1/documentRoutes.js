@@ -22,4 +22,12 @@ router.get(
   documentController.getAllDocumentsAcrossIndices
 );
 
+// Route to get categories of a user
+router.get(
+  "/categories/:userId",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getUserCategories
+);
+
 module.exports = router;

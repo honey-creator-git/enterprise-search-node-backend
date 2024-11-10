@@ -303,3 +303,73 @@ exports.reindexIndices = async (req, res) => {
     res.status(500).send("An error occurred during reindexing.");
   }
 };
+
+exports.updateCategoryUser = async (req, res) => {
+  const userId = req.params.userId; // Get user ID from request parameters
+  const { categories } = req.body; // Get comma-separated list of categories from request body
+
+  if (!categories || categories.trim() === "") {
+    return res
+      .status(400)
+      .json({ error: "Categories field is required and should not be empty" });
+  }
+
+  // Split the categories string into an array
+  const categoryList = categories.split(",").map((category) => category.trim());
+
+  try {
+    // Loop through each category in the category list
+    for (const category of categoryList) {
+      // Check if the category already exists in the index
+      const searchResponse = await client.search({
+        index: "category-user",
+        body: {
+          query: {
+            term: { category: category },
+          },
+        },
+      });
+
+      // If category exists, update the existing document by appending the userId
+      if (searchResponse.hits.total.value > 0) {
+        const existingDoc = searchResponse.hits.hits[0];
+        const existingUserIds = existingDoc._source.user
+          .split(",")
+          .map((id) => id.trim());
+
+        // If userId is not already associated with this category, add it
+        if (!existingUserIds.includes(userId)) {
+          existingUserIds.push(userId);
+          await client.update({
+            index: "category-user",
+            id: existingDoc._id,
+            body: {
+              doc: {
+                user: existingUserIds.join(", "),
+              },
+            },
+          });
+        }
+      } else {
+        // If category does not exist, create a new document with the userId
+        await client.index({
+          index: "category-user",
+          body: {
+            category: category,
+            user: userId,
+          },
+        });
+      }
+    }
+
+    res.status(200).json({
+      message: `Categories for user ${userId} updated successfully.`,
+    });
+  } catch (error) {
+    console.error("Error updating categories for user: ", error);
+    res.status(500).json({
+      error: "Failed to update categories",
+      details: error.message,
+    });
+  }
+};

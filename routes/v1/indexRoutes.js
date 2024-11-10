@@ -103,4 +103,12 @@ router.post(
   documentController.addDocument
 );
 
+// Route to update category-user index with userId
+router.put(
+  "/category-user/:userId",
+  setRoleMiddleware,
+  checkAdminAccess,
+  indexController.updateCategoryUser
+);
+
 module.exports = router;
