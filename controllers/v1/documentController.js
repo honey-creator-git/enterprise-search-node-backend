@@ -239,17 +239,52 @@ exports.searchDocuments = async (req, res) => {
   const size = 10000; // Default to 10 if not provided
   let searchQuery;
 
+  console.log("User id => ", req.userId);
+
   try {
-    // Construct the search query
+    // Step 1: Retrieve categories for the user from "category-user" index
+    const categoryResponse = await client.search({
+      index: "category-user",
+      body: {
+        query: {
+          term: {
+            user: req.userId, // Match the userId in the category-user index
+          },
+        },
+      },
+    });
+
+    // Extract the categories from the category-user index response
+    const userCategories = categoryResponse.hits.hits.map(
+      (hit) => hit._source.category
+    );
+
+    console.log("User Categories => ", userCategories);
+
+    // If the user has no associated categories, return an empty response
+    if (userCategories.length === 0) {
+      return res.status(200).json({
+        message: "No categories found for the user",
+        results: [],
+      });
+    }
+
+    // Step 2: Construct the main search query
     searchQuery = {
       index: indexName,
       body: {
         query: {
           bool: {
             must: [],
-            filter: [],
+            filter: [
+              {
+                terms: { category: userCategories }, // Filter by user's categories
+              },
+            ],
           },
         },
+        from,
+        size,
       },
     };
 
@@ -290,6 +325,7 @@ exports.searchDocuments = async (req, res) => {
       }
     }
 
+    // If no keyword or filters are provided, search all documents with user's categories
     if (
       keyword?.length === 0 &&
       query.title?.length === 0 &&
@@ -300,7 +336,9 @@ exports.searchDocuments = async (req, res) => {
         index: "*",
         body: {
           query: {
-            match_all: {},
+            bool: {
+              filter: [{ terms: { category: userCategories } }], // Filter by user's categories
+            },
           },
           from, // Start from this document (for pagination)
           size, // Number of documents to retrieve (pagination size)
@@ -317,13 +355,11 @@ exports.searchDocuments = async (req, res) => {
 
     res.status(200).json({
       message: "Search completed successfully",
+      total: filtered_documents.length,
       results: filtered_documents.map((doc) => ({
         index: doc._index, // Include the index name for each document
         id: doc._id, // Include the document ID
-        title: doc._source.title,
-        description: doc._source.description,
-        content: doc._source.content,
-        image: doc._source.image,
+        ...doc._source,
       })),
     });
   } catch (error) {
@@ -430,10 +466,7 @@ exports.searchAllDocuments = async (req, res) => {
       results: filtered_documents.map((doc) => ({
         index: doc._index, // Include the index name for each document
         id: doc._id, // Include the document ID
-        title: doc._source.title,
-        description: doc._source.description,
-        content: doc._source.content,
-        image: doc._source.image,
+        ...doc._source,
       })),
     });
   } catch (error) {
@@ -474,10 +507,7 @@ exports.getAllDocuments = async (req, res) => {
         return {
           index: hit._index, // Include the index name for each document
           id: hit._id, // Include the document ID
-          title: hit._source.title,
-          description: hit._source.description,
-          content: hit._source.content,
-          image: hit._source.image,
+          ...hit._source,
         };
       }), // Return only document sources
     });
@@ -520,10 +550,7 @@ exports.getAllDocumentsAcrossIndices = async (req, res) => {
       documents: filtered_documents.map((doc) => ({
         index: doc._index, // Include the index name for each document
         id: doc._id, // Include the document ID
-        title: doc._source.title,
-        description: doc._source.description,
-        content: doc._source.content,
-        image: doc._source.image,
+        ...doc._source,
       })),
     });
   } catch (error) {
@@ -560,10 +587,7 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
       const docs = response.hits.hits.map((hit) => ({
         "@search.action": "upload", // Required action for Azure Search API
         id: hit._id, // Primary key in your Azure index
-        title: hit._source.title, // Example field - adjust as per your schema
-        description: hit._source.description,
-        content: hit._source.content,
-        image: hit._source.image,
+        ...hit._source,
       }));
 
       if (docs.length > 0) {

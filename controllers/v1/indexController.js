@@ -14,7 +14,20 @@ const searchClient = new SearchIndexClient(
 
 // Controller to create a new index in Elastic Search Cluster & create a new index in Azure AI Search
 exports.createIndex = async (req, res) => {
-  const indexName = req.body.indexName?.toLowerCase() || "coid";
+  const indexName = req.body.indexName?.toLowerCase();
+
+  const documentFields = req.body.documentFields;
+
+  if (
+    !documentFields ||
+    !Array.isArray(documentFields) ||
+    documentFields.length === 0
+  ) {
+    return res.status(400).json({
+      messag:
+        "Invalid or missing documentFields. Please provide a non-empty array of field definitions",
+    });
+  }
 
   try {
     // Check if the index already exists
@@ -28,6 +41,12 @@ exports.createIndex = async (req, res) => {
       });
     }
 
+    // Create dynamic mappings for Elasticsearch
+    const esMappings = { properties: {} };
+    documentFields.forEach((field) => {
+      esMappings.properties[field.name] = { type: field.type || "text" };
+    });
+
     // Create the new index with settings and mappings
     const esResponse = await client.indices.create({
       index: indexName,
@@ -36,46 +55,36 @@ exports.createIndex = async (req, res) => {
           number_of_shards: 1,
           number_of_replicas: 1,
         },
-        mappings: {
-          properties: {
-            title: { type: "text" },
-            description: { type: "text" },
-            content: { type: "text" },
-            image: { type: "keyword" },
-          },
-        },
+        mappings: esMappings,
       },
     });
+
+    // Define Azure AI Search index Schema based on documentFields
+    let auzreFields = [
+      { name: "id", type: "Edm.String", key: true, searchable: false },
+    ];
+    const tempAzureFields = documentFields.map((field) => ({
+      name: field.name,
+      type: field.azureType || "Edm.String", // Defaults to "Edm.String" if not provided
+      searchable: field.searchable || true,
+      filterable: field.filterable || true,
+      sortable: field.sortable || true,
+    }));
+
+    auzreFields = auzreFields.concat(tempAzureFields);
 
     // Define indexSchema for the new index of Azure AI Search
     const azureIndexSchema = {
       name: indexName,
-      fields: [
-        { name: "id", type: "Edm.String", key: true, searchable: false },
+      fields: auzreFields,
+      suggesters: [
         {
-          name: "title",
-          type: "Edm.String",
-          searchable: true,
-          filterable: true,
-          sortable: true,
+          name: "sg",
+          sourceFields: documentFields
+            .filter((f) => f.searchable)
+            .map((f) => f.name),
         },
-        {
-          name: "description",
-          type: "Edm.String",
-          searchable: true,
-          filterable: true,
-          sortable: true,
-        },
-        {
-          name: "content",
-          type: "Edm.String",
-          searchable: true,
-          filterable: true,
-          sortable: true,
-        },
-        { name: "image", type: "Edm.String", searchable: true },
       ],
-      suggesters: [{ name: "sg", sourceFields: ["title", "description"] }],
       corsOptions: {
         allowedOrigins: ["*"],
         allowedHeaders: ["*"],
@@ -87,11 +96,10 @@ exports.createIndex = async (req, res) => {
           {
             name: "es-semantic-config",
             prioritizedFields: {
-              titleField: { fieldName: "title" },
-              prioritizedContentFields: [
-                { fieldName: "description" },
-                { fieldName: "content" },
-              ],
+              titleField: { fieldName: documentFields[0].name }, // Assuming the first field is title
+              prioritizedContentFields: documentFields.map((field) => ({
+                fieldName: field.name,
+              })),
             },
           },
         ],
@@ -122,26 +130,45 @@ exports.createIndex = async (req, res) => {
 exports.deleteIndex = async (req, res) => {
   const indexName = req.params.indexName?.toLowerCase(); // Get the index name from the URL parameter
 
+  if (!indexName) {
+    return res.status(400).json({
+      message: "Index name is required",
+    });
+  }
+
   try {
     // Check if the index exists
     const exists = await client.indices.exists({
       index: indexName,
     });
 
-    if (!exists) {
-      return res.status(404).json({
-        message: `Index ${indexName} does not exist.`,
+    if (exists) {
+      // Delete the index
+      await client.indices.delete({
+        index: indexName,
       });
+    } else {
+      console.log(`Index ${indexName} does not exist in Elasticsearch.`);
     }
 
-    // Delete the index
-    const response = await client.indices.delete({
-      index: indexName,
-    });
+    // Check if the index exists in Azure Cognitive Search
+    try {
+      await searchClient.getIndex(indexName);
+
+      // If index exists, delete it
+      await searchClient.deleteIndex(indexName);
+    } catch (azureError) {
+      if (azureError.statusCode === 404) {
+        console.log(
+          `Index ${indexName} does not exist in Azure Cognitive Search.`
+        );
+      } else {
+        throw azureError; // Re-throw if it's not a 404 error
+      }
+    }
 
     res.status(200).json({
-      message: `Index "${indexName}" deleted successfully.`,
-      response: response.body,
+      message: `Index "${indexName}" deleted successfully from both Elasticsearch and Azure Cognitive Search.`,
     });
   } catch (error) {
     console.error("Error deleting index: ", error);
