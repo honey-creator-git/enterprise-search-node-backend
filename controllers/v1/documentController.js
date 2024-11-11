@@ -750,7 +750,7 @@ exports.getUserCategories = async (req, res) => {
 };
 
 exports.getAllCategoriesForTenant = async (req, res) => {
-  const tenantId = req.params.tenantId;
+  const tenantId = req.params.tenantId.toLowerCase();
 
   try {
     // Search for categories with the specified tenantId
