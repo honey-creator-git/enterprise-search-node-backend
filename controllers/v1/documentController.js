@@ -783,46 +783,76 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   const uoid = req.userId;
   const groups = req.groups;
   const permissions = req.permissions;
+  let esResponse;
 
-  const searchClientForNewDocument = new SearchClient(
-    process.env.AZURE_SEARCH_ENDPOINT,
-    indexName,
-    new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
-  );
+  // const searchClientForNewDocument = new SearchClient(
+  //   process.env.AZURE_SEARCH_ENDPOINT,
+  //   indexName,
+  //   new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+  // );
 
   try {
-    // Add the document to the Elastic Search index
-    const esResponse = await client.index({
+    // Check if the user already exists in the index
+    const searchResponse = await client.search({
       index: indexName,
       body: {
-        name: name,
-        email: email,
-        coid: coid,
-        uoid: uoid,
-        groups: groups,
-        permissions: permissions,
+        query: {
+          match: { uoid: uoid },
+        },
       },
     });
 
-    const azDocument = {
-      id: esResponse._id.slice(1),
-      name: name,
-      email: email,
-      coid: coid,
-      uoid: uoid,
-      groups: groups,
-      permissions: permissions,
-    };
+    if (searchResponse.hits.total.value > 0) {
+      // Use exists, so update their values
+      const existingDoc = searchResponse.hits.hits[0];
+      esResponse = await client.update({
+        index: indexName,
+        id: existingDoc._id,
+        body: {
+          doc: {
+            name: name,
+            email: email,
+            coid: coid,
+            uoid: uoid,
+            groups: groups,
+            permissions: permissions,
+          },
+        },
+      });
+    } else {
+      // Add the document to the Elastic Search index
+      esResponse = await client.index({
+        index: indexName,
+        body: {
+          name: name,
+          email: email,
+          coid: coid,
+          uoid: uoid,
+          groups: groups,
+          permissions: permissions,
+        },
+      });
+    }
+
+    // const azDocument = {
+    //   id: esResponse._id.slice(1),
+    //   name: name,
+    //   email: email,
+    //   coid: coid,
+    //   uoid: uoid,
+    //   groups: groups,
+    //   permissions: permissions,
+    // };
 
     // Add the document to the Azure Cognitive Search
-    const azResponse = await searchClientForNewDocument.uploadDocuments([
-      azDocument,
-    ]);
+    // const azResponse = await searchClientForNewDocument.uploadDocuments([
+    //   azDocument,
+    // ]);
 
     res.status(201).json({
       message: `user information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
       elasticsearchResponse: esResponse,
-      azureResponse: azResponse,
+      // azureResponse: azResponse,
     });
   } catch (error) {
     console.error("Error saving user: ", error);
