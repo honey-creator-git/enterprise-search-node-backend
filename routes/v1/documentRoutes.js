@@ -47,7 +47,7 @@ router.get(
 
 // Route to delete a document by ID from an index (only accessible by admin)
 router.delete(
-  "/",
+  "/:indexName",
   setRoleMiddleware,
   checkAdminAccess,
   documentController.deleteDocument

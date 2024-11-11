@@ -15,6 +15,12 @@ const setRoleMiddleware = (req, res, next) => {
     req.userId = decodedToken["uoid"]; // Get uoid from token
     req.coid = decodedToken["coid"]; // Get coid from token
 
+    req.name = decodedToken["name"]; // Get name from token
+    req.email = decodedToken["email"]; // Get email from token
+
+    req.permissions = decodedToken["permissions"].join(", ");
+    req.groups = decodedToken["groups"].join(", ");
+
     // Check if "groups" includes "Admin"
     const groups = decodedToken.groups || [];
     req.userRole = groups.includes("Admin") ? "Admin" : "Viewer";

@@ -5,6 +5,7 @@ const documentRoutes = require("./routes/v1/documentRoutes");
 const semanticRoutes = require("./routes/v1/semanticRoutes");
 const categoryRoutes = require("./routes/v1/categoryRoutes");
 const categoryUserRoutes = require("./routes/v1/categoryUserRoutes");
+const userRoutes = require("./routes/v1/userRoutes");
 
 dotenv.config();
 
@@ -25,6 +26,9 @@ app.use("/api/v1/category", categoryRoutes);
 
 // use category-user routes
 app.use("/api/v1/category_user", categoryUserRoutes);
+
+// use user routes
+app.use("/api/v1/user", userRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;

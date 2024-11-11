@@ -14,7 +14,8 @@ const searchClient = new SearchIndexClient(
 
 // Controller to create a new index in Elastic Search Cluster & create a new index in Azure AI Search
 exports.createIndex = async (req, res) => {
-  const indexName = req.body.indexName?.toLowerCase();
+  const indexName =
+    req.body.indexName?.toLowerCase() + "_" + req.coid.toLowerCase();
 
   const documentFields = req.body.documentFields;
 
@@ -310,7 +311,7 @@ exports.updateCategoryUser = async (req, res) => {
     if (!categories || categories.trim() === "") {
       // If categories is an empty string, remove all category associations for this user
       await client.deleteByQuery({
-        index: "category-user",
+        index: `category_user_${req.coid.toLowerCase()}`,
         body: {
           query: {
             term: { user: userId },
@@ -330,10 +331,10 @@ exports.updateCategoryUser = async (req, res) => {
 
     // Check if the user already exists in the index
     const searchResponse = await client.search({
-      index: "category-user",
+      index: `category_user_${req.coid.toLowerCase()}`,
       body: {
         query: {
-          term: { user: userId },
+          match: { user: userId },
         },
       },
     });
@@ -342,7 +343,7 @@ exports.updateCategoryUser = async (req, res) => {
       // User exists, so update their categories
       const existingDoc = searchResponse.hits.hits[0];
       await client.update({
-        index: "category-user",
+        index: `category_user_${req.coid.toLowerCase()}`,
         id: existingDoc._id,
         body: {
           doc: {
@@ -353,7 +354,7 @@ exports.updateCategoryUser = async (req, res) => {
     } else {
       // User does not exist, create a new document with the user and categories
       await client.index({
-        index: "category-user",
+        index: `category_user_${req.coid.toLowerCase()}`,
         body: {
           user: userId,
           categories: categoryList.join(", "),

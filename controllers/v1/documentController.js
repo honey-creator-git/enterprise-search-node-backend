@@ -209,7 +209,8 @@ exports.updateDocument = async (req, res) => {
 
 // Controller to delete a document by ID from an index
 exports.deleteDocument = async (req, res) => {
-  const indexName = ("tenant_" + req.coid).toLowerCase();
+  // const indexName = ("tenant_" + req.coid).toLowerCase();
+  const indexName = req.params.indexName;
   const documentId = req.query.documentId;
 
   try {
@@ -242,10 +243,10 @@ exports.searchDocuments = async (req, res) => {
   try {
     // Step 1: Retrieve categories associated with the user from "category-user" index
     const categoryResponse = await client.search({
-      index: "category-user",
+      index: `category_user_${req.coid.toLowerCase()}`,
       body: {
         query: {
-          term: {
+          match: {
             user: req.userId, // Match the userId in the category-user index
           },
         },
@@ -256,8 +257,6 @@ exports.searchDocuments = async (req, res) => {
     const userCategories = categoryResponse.hits.hits.flatMap((hit) =>
       hit._source.categories.split(",").map((category) => category.trim())
     );
-
-    console.log("User Categories => ", userCategories);
 
     // If the user has no associated categories, return an empty response
     if (userCategories.length === 0) {
@@ -713,7 +712,7 @@ exports.getUserCategories = async (req, res) => {
   try {
     // Search in the "category-user" index for documents that include the userId in the "user" field
     const categoryResponse = await client.search({
-      index: "category-user",
+      index: `category_user_${req.coid.toLowerCase()}`,
       body: {
         query: {
           match: { user: userId },
@@ -746,7 +745,7 @@ exports.getAllCategoriesForTenant = async (req, res) => {
   try {
     // Search for categories with the specified tenantId
     const response = await client.search({
-      index: "categories", // Name of your index
+      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
       body: {
         query: {
           term: {
@@ -759,7 +758,7 @@ exports.getAllCategoriesForTenant = async (req, res) => {
     // Extract the categories from the response
     const categories = response.hits.hits.map((hit) => ({
       id: hit._id,
-      ...hit._source,
+      name: hit._source.name,
     }));
 
     res.status(200).json({
@@ -770,6 +769,65 @@ exports.getAllCategoriesForTenant = async (req, res) => {
     console.error("Error retrieving categories: ", error);
     res.status(500).json({
       error: "Failed to retrieve categories",
+      details: error.message,
+    });
+  }
+};
+
+exports.decodeUserTokenAndSave = async (req, res) => {
+  const indexName = `users_${req.coid.toLowerCase()}`;
+
+  const name = req.name;
+  const email = req.email;
+  const coid = req.coid;
+  const uoid = req.userId;
+  const groups = req.groups;
+  const permissions = req.permissions;
+
+  const searchClientForNewDocument = new SearchClient(
+    process.env.AZURE_SEARCH_ENDPOINT,
+    indexName,
+    new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+  );
+
+  try {
+    // Add the document to the Elastic Search index
+    const esResponse = await client.index({
+      index: indexName,
+      body: {
+        name: name,
+        email: email,
+        coid: coid,
+        uoid: uoid,
+        groups: groups,
+        permissions: permissions,
+      },
+    });
+
+    const azDocument = {
+      id: esResponse._id.slice(1),
+      name: name,
+      email: email,
+      coid: coid,
+      uoid: uoid,
+      groups: groups,
+      permissions: permissions,
+    };
+
+    // Add the document to the Azure Cognitive Search
+    const azResponse = await searchClientForNewDocument.uploadDocuments([
+      azDocument,
+    ]);
+
+    res.status(201).json({
+      message: `user information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
+      elasticsearchResponse: esResponse,
+      azureResponse: azResponse,
+    });
+  } catch (error) {
+    console.error("Error saving user: ", error);
+    res.status(500).json({
+      error: "Failed to save user",
       details: error.message,
     });
   }
