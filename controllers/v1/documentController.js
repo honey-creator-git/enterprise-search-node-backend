@@ -832,3 +832,43 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     });
   }
 };
+
+exports.getAllUsersFromTenant = async (req, res) => {
+  const indexName = ("users_" + req.coid).toLowerCase();
+  const from = parseInt(req.query.from, 10) || 0; // Default to 0 if not provided
+  const size = parseInt(req.query.size, 10) || 10000; // Default to 10 if not provided
+
+  try {
+    // Construct the query to get all users
+    const searchQuery = {
+      index: indexName,
+      body: {
+        query: {
+          match_all: {},
+        },
+        from, // Start from this document (for pagination)
+        size, // Number of documents to retrieve (pagination size)
+      },
+    };
+
+    // Execute the search query
+    const response = await client.search(searchQuery);
+
+    res.status(200).json({
+      message: `Fetched users from index "${indexName}".`,
+      total: response.hits.total.value,
+      documents: response.hits.hits.map((hit) => {
+        return {
+          id: hit._id, // Include the document ID
+          ...hit._source,
+        };
+      }), // Return only document sources
+    });
+  } catch (error) {
+    console.error("Error fetching users: ", error);
+    res.status(500).json({
+      error: "Failed to fetch users",
+      details: error.message,
+    });
+  }
+};

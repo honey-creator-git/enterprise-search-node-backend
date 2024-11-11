@@ -11,4 +11,11 @@ router.post(
   documentController.decodeUserTokenAndSave
 );
 
+router.get(
+    "/",
+    setRoleMiddleware,
+    checkAdminAccess,
+    documentController.getAllUsersFromTenant
+)
+
 module.exports = router;
