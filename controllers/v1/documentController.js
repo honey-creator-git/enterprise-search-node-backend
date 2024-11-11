@@ -233,30 +233,28 @@ exports.deleteDocument = async (req, res) => {
 
 // Controller to search documents with various filters and query options
 exports.searchDocuments = async (req, res) => {
-  const indexName = req.params.indexName?.toLowerCase();
+  const indexName = ("tenant_" + req.coid).toLowerCase();
   const { keyword, query, fuzziness = "AUTO" } = req.body;
-  const from = 0; // Default to 0 if not provided
-  const size = 10000; // Default to 10 if not provided
+  const from = 0; // Default pagination start
+  const size = 10000; // Maximum number of documents to retrieve
   let searchQuery;
 
-  console.log("User id => ", req.userId);
-
   try {
-    // Step 1: Retrieve categories for the user from "category-user" index
+    // Step 1: Retrieve categories associated with the user from "category-user" index
     const categoryResponse = await client.search({
       index: "category-user",
       body: {
         query: {
-          wildcard: {
-            user: `*${req.userId}*`, // Match the userId in the category-user index
+          term: {
+            user: req.userId, // Match the userId in the category-user index
           },
         },
       },
     });
 
     // Extract the categories from the category-user index response
-    const userCategories = categoryResponse.hits.hits.map(
-      (hit) => hit._source.category
+    const userCategories = categoryResponse.hits.hits.flatMap((hit) =>
+      hit._source.categories.split(",").map((category) => category.trim())
     );
 
     console.log("User Categories => ", userCategories);
@@ -269,7 +267,7 @@ exports.searchDocuments = async (req, res) => {
       });
     }
 
-    // Step 2: Construct the main search query
+    // Step 2: Construct the main search query, including category filter
     searchQuery = {
       index: indexName,
       body: {
@@ -299,7 +297,7 @@ exports.searchDocuments = async (req, res) => {
       });
     }
 
-    // Add query filters if provided
+    // Add additional query filters if provided
     if (query) {
       if (query.title) {
         searchQuery.body.query.bool.filter.push({
@@ -326,12 +324,7 @@ exports.searchDocuments = async (req, res) => {
     }
 
     // If no keyword or filters are provided, search all documents with user's categories
-    if (
-      keyword?.length === 0 &&
-      query.title?.length === 0 &&
-      query.description?.length === 0 &&
-      query.content?.length === 0
-    ) {
+    if (!keyword && (!query || Object.values(query).every((val) => !val))) {
       searchQuery = {
         index: "*",
         body: {
@@ -340,8 +333,8 @@ exports.searchDocuments = async (req, res) => {
               filter: [{ terms: { category: userCategories } }], // Filter by user's categories
             },
           },
-          from, // Start from this document (for pagination)
-          size, // Number of documents to retrieve (pagination size)
+          from,
+          size,
         },
       };
     }
@@ -349,14 +342,14 @@ exports.searchDocuments = async (req, res) => {
     // Execute the search query
     const response = await client.search(searchQuery);
 
-    const filtered_documents = response.hits.hits.filter(
+    const filteredDocuments = response.hits.hits.filter(
       (hit) => hit._index === indexName
     );
 
     res.status(200).json({
       message: "Search completed successfully",
-      total: filtered_documents.length,
-      results: filtered_documents.map((doc) => ({
+      total: filteredDocuments.length,
+      results: filteredDocuments.map((doc) => ({
         index: doc._index, // Include the index name for each document
         id: doc._id, // Include the document ID
         ...doc._source,
@@ -713,32 +706,30 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   }
 };
 
-// Controller to retrive all categories with user id
+// Controller to retrieve all categories associated with a specific user ID
 exports.getUserCategories = async (req, res) => {
-  const userId = req.params.userId; // User ID from the request
+  const userId = req.query.userId; // User ID from the request parameters
 
   try {
-    // Search in the "category-user" index for categories that include the userId
+    // Search in the "category-user" index for documents that include the userId in the "user" field
     const categoryResponse = await client.search({
       index: "category-user",
       body: {
         query: {
-          wildcard: {
-            user: `*${userId}*`, // Match userId within the comma-separated "user" field
-          },
+          match: { user: userId },
         },
       },
     });
 
-    // Extract the categories from the search response
-    const userCategories = categoryResponse.hits.hits.map(
-      (hit) => hit._source.category
+    // Extract and format the categories from the search response
+    const userCategories = categoryResponse.hits.hits.flatMap((hit) =>
+      hit._source.categories.split(",").map((category) => category.trim())
     );
 
-    // Return the categories associated with the user
+    // Return the unique categories associated with the user
     res.status(200).json({
       message: `Categories for user ${userId} retrieved successfully`,
-      categories: userCategories,
+      categories: [...new Set(userCategories)], // Remove duplicates if any
     });
   } catch (error) {
     console.error("Error retrieving user categories: ", error);
@@ -750,7 +741,7 @@ exports.getUserCategories = async (req, res) => {
 };
 
 exports.getAllCategoriesForTenant = async (req, res) => {
-  const tenantId = req.params.tenantId.toLowerCase();
+  const tenantId = ("tenant_" + req.coid).toLowerCase();
 
   try {
     // Search for categories with the specified tenantId

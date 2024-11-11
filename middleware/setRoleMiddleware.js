@@ -12,8 +12,8 @@ const setRoleMiddleware = (req, res, next) => {
     const decodedToken = jwt.decode(token);
     if (!decodedToken) return res.status(401).send("Invalid token");
 
-    console.log("Decoded Token => ", decodedToken["uoid"]);
     req.userId = decodedToken["uoid"]; // Get uoid from token
+    req.coid = decodedToken["coid"]; // Get coid from token
 
     // Check if "groups" includes "Admin"
     const groups = decodedToken.groups || [];

@@ -1,6 +1,5 @@
 const express = require("express");
 const documentController = require("../../controllers/v1/documentController");
-const authorize = require("../../middleware/authorize");
 const setRoleMiddleware = require("../../middleware/setRoleMiddleware");
 const checkAdminAccess = require("../../middleware/checkAdminAccess");
 const checkViewerAccess = require("../../middleware/checkViewerAccess");
@@ -22,20 +21,12 @@ router.get(
   documentController.getAllDocumentsAcrossIndices
 );
 
-// Route to get categories of a user
-router.get(
-  "/categories/:userId",
+// Route to search documents with keyword and advanced query support (accessible by all roles)
+router.post(
+  "/",
   setRoleMiddleware,
-  checkAdminAccess,
-  documentController.getUserCategories
-);
-
-// Route to retrieve all categories with tenant id
-router.get(
-  "/:tenantId/categories",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.getAllCategoriesForTenant
+  checkViewerAccess,
+  documentController.searchDocuments
 );
 
 module.exports = router;

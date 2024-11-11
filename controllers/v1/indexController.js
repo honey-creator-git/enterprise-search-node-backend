@@ -256,9 +256,7 @@ exports.reindexIndices = async (req, res) => {
           description: { type: "text" },
           content: { type: "text" },
           image: { type: "keyword" },
-          title_vector: { type: "dense_vector", dims: 768 },
-          content_vector: { type: "dense_vector", dims: 768 },
-          description_vector: { type: "dense_vector", dims: 768 },
+          category: { type: "keyword" },
         },
       },
     };
@@ -284,10 +282,10 @@ exports.reindexIndices = async (req, res) => {
     });
 
     // Step 3: Delete the old index
-    const oldIndex = oldIndex1;
-    const responseForDeletingOldIndex = await client.indices.delete({
-      index: oldIndex,
-    });
+    // const oldIndex = oldIndex1;
+    // const responseForDeletingOldIndex = await client.indices.delete({
+    //   index: oldIndex,
+    // });
 
     // Step 4: Create alias for new index
     const aliasName = aliasName1;
@@ -305,61 +303,62 @@ exports.reindexIndices = async (req, res) => {
 };
 
 exports.updateCategoryUser = async (req, res) => {
-  const userId = req.params.userId; // Get user ID from request parameters
+  const userId = req.userId; // Get user ID from request parameters
   const { categories } = req.body; // Get comma-separated list of categories from request body
 
-  if (!categories || categories.trim() === "") {
-    return res
-      .status(400)
-      .json({ error: "Categories field is required and should not be empty" });
-  }
-
-  // Split the categories string into an array
-  const categoryList = categories.split(",").map((category) => category.trim());
-
   try {
-    // Loop through each category in the category list
-    for (const category of categoryList) {
-      // Check if the category already exists in the index
-      const searchResponse = await client.search({
+    if (!categories || categories.trim() === "") {
+      // If categories is an empty string, remove all category associations for this user
+      await client.deleteByQuery({
         index: "category-user",
         body: {
           query: {
-            term: { category: category },
+            term: { user: userId },
           },
         },
       });
 
-      // If category exists, update the existing document by appending the userId
-      if (searchResponse.hits.total.value > 0) {
-        const existingDoc = searchResponse.hits.hits[0];
-        const existingUserIds = existingDoc._source.user
-          .split(",")
-          .map((id) => id.trim());
+      return res.status(200).json({
+        message: `All categories removed for user ${userId}.`,
+      });
+    }
 
-        // If userId is not already associated with this category, add it
-        if (!existingUserIds.includes(userId)) {
-          existingUserIds.push(userId);
-          await client.update({
-            index: "category-user",
-            id: existingDoc._id,
-            body: {
-              doc: {
-                user: existingUserIds.join(", "),
-              },
-            },
-          });
-        }
-      } else {
-        // If category does not exist, create a new document with the userId
-        await client.index({
-          index: "category-user",
-          body: {
-            category: category,
-            user: userId,
+    // Split the categories string into an array
+    const categoryList = categories
+      .split(",")
+      .map((category) => category.trim());
+
+    // Check if the user already exists in the index
+    const searchResponse = await client.search({
+      index: "category-user",
+      body: {
+        query: {
+          term: { user: userId },
+        },
+      },
+    });
+
+    if (searchResponse.hits.total.value > 0) {
+      // User exists, so update their categories
+      const existingDoc = searchResponse.hits.hits[0];
+      await client.update({
+        index: "category-user",
+        id: existingDoc._id,
+        body: {
+          doc: {
+            categories: categoryList.join(", "),
           },
-        });
-      }
+        },
+      });
+    } else {
+      // User does not exist, create a new document with the user and categories
+      await client.index({
+        index: "category-user",
+        body: {
+          user: userId,
+          categories: categoryList.join(", "),
+        },
+      });
     }
 
     res.status(200).json({
