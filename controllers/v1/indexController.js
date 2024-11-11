@@ -303,7 +303,7 @@ exports.reindexIndices = async (req, res) => {
 };
 
 exports.updateCategoryUser = async (req, res) => {
-  const userId = req.userId; // Get user ID from request parameters
+  const userId = req.query.userId; // Get user ID from request parameters
   const { categories } = req.body; // Get comma-separated list of categories from request body
 
   try {
