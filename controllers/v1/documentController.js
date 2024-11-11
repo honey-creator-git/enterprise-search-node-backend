@@ -146,8 +146,8 @@ exports.addDocument = async (req, res) => {
 
 // Controller to retrieve a document by ID from an index
 exports.getDocument = async (req, res) => {
-  const indexName = req.params.indexName?.toLowerCase();
-  const documentId = req.params.documentId;
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const documentId = req.query.documentId;
 
   try {
     const response = await client.get({
@@ -170,8 +170,8 @@ exports.getDocument = async (req, res) => {
 
 // Controller to update an existing document in an index
 exports.updateDocument = async (req, res) => {
-  const indexName = req.params.indexName?.toLowerCase();
-  const documentId = req.params.documentId;
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const documentId = req.query.documentId;
   const updatedFields = req.body;
 
   try {
@@ -209,8 +209,8 @@ exports.updateDocument = async (req, res) => {
 
 // Controller to delete a document by ID from an index
 exports.deleteDocument = async (req, res) => {
-  const indexName = req.params.indexName?.toLowerCase();
-  const documentId = req.params.documentId;
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const documentId = req.query.documentId;
 
   try {
     const response = await client.delete({

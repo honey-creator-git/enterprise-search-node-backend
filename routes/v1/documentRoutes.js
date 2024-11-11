@@ -14,12 +14,12 @@ router.get(
 );
 
 // Route to retrieve all documents across all indices with optional pagination (only accessible by admin)
-router.get(
-  "/",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.getAllDocumentsAcrossIndices
-);
+// router.get(
+//   "/",
+//   setRoleMiddleware,
+//   checkAdminAccess,
+//   documentController.getAllDocumentsAcrossIndices
+// );
 
 // Route to search documents with keyword and advanced query support (accessible by all roles)
 router.post(
@@ -27,6 +27,30 @@ router.post(
   setRoleMiddleware,
   checkViewerAccess,
   documentController.searchDocuments
+);
+
+// Route to update a document by ID from an index (accessible by admin)
+router.put(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.updateDocument
+);
+
+// Route to retrieve a document by ID from an index (accessible by all roles)
+router.get(
+  "/",
+  setRoleMiddleware,
+  checkViewerAccess,
+  documentController.getDocument
+);
+
+// Route to delete a document by ID from an index (only accessible by admin)
+router.delete(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.deleteDocument
 );
 
 module.exports = router;
