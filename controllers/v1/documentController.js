@@ -124,7 +124,7 @@ exports.addDocument = async (req, res) => {
     // Add the document to Azure Cognitive Search
     const azDocument = {
       ...document,
-      id: esResponse._id, // Assign Elasticsearch document ID as the Azure document ID
+      id: esResponse._id.slice(1), // Assign Elasticsearch document ID as the Azure document ID
     };
     const azResponse = await searchClientForNewDocument.uploadDocuments([
       azDocument,
@@ -742,6 +742,41 @@ exports.getUserCategories = async (req, res) => {
     });
   } catch (error) {
     console.error("Error retrieving user categories: ", error);
+    res.status(500).json({
+      error: "Failed to retrieve categories",
+      details: error.message,
+    });
+  }
+};
+
+exports.getAllCategoriesForTenant = async (req, res) => {
+  const tenantId = req.params.tenantId;
+
+  try {
+    // Search for categories with the specified tenantId
+    const response = await client.search({
+      index: "categories", // Name of your index
+      body: {
+        query: {
+          term: {
+            tenantId: tenantId, // Filter by tenantId
+          },
+        },
+      },
+    });
+
+    // Extract the categories from the response
+    const categories = response.hits.hits.map((hit) => ({
+      id: hit._id,
+      ...hit._source,
+    }));
+
+    res.status(200).json({
+      message: `Categories retrieved successfully for tenantId: ${tenantId}`,
+      categories: categories,
+    });
+  } catch (error) {
+    console.error("Error retrieving categories: ", error);
     res.status(500).json({
       error: "Failed to retrieve categories",
       details: error.message,

@@ -30,4 +30,12 @@ router.get(
   documentController.getUserCategories
 );
 
+// Route to retrieve all categories with tenant id
+router.get(
+  "/:tenantId/categories",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getAllCategoriesForTenant
+);
+
 module.exports = router;
