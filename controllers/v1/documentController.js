@@ -1004,15 +1004,44 @@ exports.getAllUsersFromTenant = async (req, res) => {
     // Execute the search query
     const response = await client.search(searchQuery);
 
+    // Process each user to add their categories
+    const documents = await Promise.all(
+      response.hits.hits.map(async (hit) => {
+        // Fetch categories for each user
+        const categoryResponse = await client.search({
+          index: `category_user_${req.coid.toLowerCase()}`,
+          body: {
+            query: {
+              match: {
+                user: hit._source.uoid, // Match the userId in the category-user index
+              },
+            },
+          },
+        });
+
+        // Extract the categories from the category-user index response
+        const userCategories = categoryResponse.hits.hits.flatMap(
+          (categoryHit) =>
+            categoryHit._source.categories
+              .split(",")
+              .map((category) => category.trim())
+        );
+
+        return {
+          id: hit._id, // Include the document ID
+          name: hit._source.name,
+          email: hit._source.email,
+          coid: hit._source.coid,
+          uoid: hit._source.uoid,
+          categories: userCategories,
+        };
+      })
+    );
+
     res.status(200).json({
       message: `Fetched users from index "${indexName}".`,
       total: response.hits.total.value,
-      documents: response.hits.hits.map((hit) => {
-        return {
-          id: hit._id, // Include the document ID
-          ...hit._source,
-        };
-      }), // Return only document sources
+      documents: documents, // Return only document sources
     });
   } catch (error) {
     console.error("Error fetching users: ", error);
