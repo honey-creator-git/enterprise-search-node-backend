@@ -19,7 +19,7 @@ app.use("/api/v1/tenant", indexRoutes);
 app.use("/api/v1/document", documentRoutes);
 
 // Use semantic search routes
-app.use("/api/v1/semantic", semanticRoutes);
+app.use("/api/v1/search_semantic", semanticRoutes);
 
 // use category routes
 app.use("/api/v1/category", categoryRoutes);
