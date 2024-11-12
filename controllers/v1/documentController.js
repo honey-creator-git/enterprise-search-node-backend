@@ -8,12 +8,6 @@ const client = require("../../config/elasticsearch");
 const axios = require("axios");
 require("dotenv").config();
 
-const searchClient = new SearchClient(
-  process.env.AZURE_SEARCH_ENDPOINT,
-  process.env.AZURE_SEARCH_INDEX_NAME,
-  new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
-);
-
 const searchIndexClient = new SearchIndexClient(
   process.env.AZURE_SEARCH_ENDPOINT,
   new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
@@ -643,6 +637,12 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
   const from = 0;
   const size = 10000;
 
+  const searchClient = new SearchClient(
+    process.env.AZURE_SEARCH_ENDPOINT,
+    indexName,
+    new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+  );
+
   try {
     // Construct the search query to match all documents
     const searchQuery = {
@@ -675,7 +675,7 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
         const resultOf = await searchClient.uploadDocuments(batch);
 
         res.status(200).json({
-          message: `Fetched documents from index ${indexName} and stored to azure AI index ${process.env.AZURE_SEARCH_INDEX_NAME}.`,
+          message: `Fetched documents from index ${indexName} and stored to azure AI index ${indexName}.`,
           total: response.hits.total.value,
           documents: response.hits.hits.map((hit) => hit._source), // Return only document sources
         });
@@ -812,7 +812,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       }
     );
     res.status(200).json({
-      message: `Fetched documents from Azure AI Service ${process.env.AZURE_SEARCH_INDEX_NAME}.`,
+      message: `Fetched documents from Azure AI Service ${indexName}.`,
       total: response.data.value.length,
       documents: response.data, // Return only document sources
     });
