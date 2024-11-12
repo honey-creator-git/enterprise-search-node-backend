@@ -22,4 +22,12 @@ router.delete(
   documentController.deleteDocumentFromAzureSearch
 );
 
+// Route to update a document by ID from an index of Azure Cognitive Search
+router.put(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.updateDocumentInAzureSearch
+);
+
 module.exports = router;

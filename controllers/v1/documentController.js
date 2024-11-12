@@ -207,6 +207,52 @@ exports.updateDocument = async (req, res) => {
   }
 };
 
+// Controller to update an existing document in an Azure Cognitive Search
+exports.updateDocumentInAzureSearch = async (req, res) => {
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const documentId = req.query.documentId;
+  const updatedFields = req.body;
+
+  try {
+    // Prepare the document with the `merge` action
+    const updatePayload = {
+      value: [
+        {
+          "@search.action": "merge", // Use merge to update specific fields
+          id: documentId, // Replace "id" with the actual key field name in your index schema
+          ...updatedFields, // Spread the updated fields into the document
+        },
+      ],
+    };
+
+    // Send the request to Azure Cognitive Search
+    const response = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2021-04-30-Preview`,
+      updatePayload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    res.status(200).json({
+      message: `Document with ID "${documentId}" updated successfully in index "${indexName}" of Azure Cognitive Search.`,
+      response: response.data,
+    });
+  } catch (error) {
+    console.error(
+      "Error updating document in Azure Cognitive Search:",
+      error.message
+    );
+    res.status(500).json({
+      error: "Failed to update document in Azure Cognitive Search",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+};
+
 // Controller to delete a document by ID from an index
 exports.deleteDocument = async (req, res) => {
   // const indexName = ("tenant_" + req.coid).toLowerCase();
@@ -237,8 +283,6 @@ exports.deleteDocumentFromAzureSearch = async (req, res) => {
   const indexName = ("tenant_" + req.coid).toLowerCase();
   const documentId = req.query.documentId;
 
-  console.log("Index Name => ", indexName, documentId);
-
   try {
     const azureResponse = await axios.post(
       `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2021-04-30-Preview`,
@@ -257,8 +301,6 @@ exports.deleteDocumentFromAzureSearch = async (req, res) => {
         },
       }
     );
-
-    console.log("Result of delete =>", azureResponse.data);
 
     res.status(200).json({
       message: `Document with ID "${documentId}" deleted successfully from index "${indexName}" of Azure Cognitive Search.`,
