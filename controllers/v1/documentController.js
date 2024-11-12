@@ -896,6 +896,7 @@ exports.getAllCategoriesForTenant = async (req, res) => {
 
 exports.decodeUserTokenAndSave = async (req, res) => {
   const indexName = `users_${req.coid.toLowerCase()}`;
+  const categoryIndexName = `category_user_${req.coid.toLowerCase()}`;
 
   const name = req.name;
   const email = req.email;
@@ -912,6 +913,28 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   // );
 
   try {
+    // Search for categories with the specified tenantId
+    const response = await client.search({
+      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
+      body: {
+        query: {
+          term: {
+            tenantId: `tenant_${req.coid.toLowerCase()}`, // Filter by tenantId
+          },
+        },
+      },
+    });
+
+    // Extract the categories from the response
+    const categories = await Promise.all(
+      response.hits.hits.map((hit) => ({
+        id: hit._id,
+        name: hit._source.name,
+      }))
+    );
+
+    const defaultCategory = categories[0].id;
+
     // Check if the user already exists in the index
     const searchResponse = await client.search({
       index: indexName,
@@ -950,6 +973,27 @@ exports.decodeUserTokenAndSave = async (req, res) => {
           uoid: uoid,
           groups: groups,
           permissions: permissions,
+        },
+      });
+    }
+
+    // Check if the user category exists in the category_user index
+    const categorySearchResponse = await client.search({
+      index: categoryIndexName,
+      body: {
+        query: {
+          match: { user: uoid },
+        },
+      },
+    });
+
+    if (categorySearchResponse.hits.total.value === 0) {
+      // No category found for the user, so create a new document with a default category
+      categoryResponse = await client.index({
+        index: categoryIndexName,
+        body: {
+          user: uoid,
+          categories: defaultCategory,
         },
       });
     }
