@@ -232,6 +232,48 @@ exports.deleteDocument = async (req, res) => {
   }
 };
 
+// Controller to delete a document by ID from an Azure Cognitive Search index
+exports.deleteDocumentFromAzureSearch = async (req, res) => {
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const documentId = req.query.documentId;
+
+  console.log("Index Name => ", indexName, documentId);
+
+  try {
+    const azureResponse = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2021-04-30-Preview`,
+      {
+        value: [
+          {
+            "@search.action": "delete",
+            id: documentId, // Replace "id" with the actual key name in your index schema
+          },
+        ],
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    console.log("Result of delete =>", azureResponse.data);
+
+    res.status(200).json({
+      message: `Document with ID "${documentId}" deleted successfully from index "${indexName}" of Azure Cognitive Search.`,
+      response: azureResponse.data, // Only include the data part of the response
+    });
+  } catch (error) {
+    console.error("Error deleting document:", error.message); // Log the error message for debugging
+
+    res.status(500).json({
+      error: "Failed to delete document from Azure Cognitive Search",
+      details: error.response ? error.response.data : error.message, // Include detailed error info if available
+    });
+  }
+};
+
 // Controller to search documents with various filters and query options
 exports.searchDocuments = async (req, res) => {
   const indexName = ("tenant_" + req.coid).toLowerCase();
@@ -607,11 +649,12 @@ exports.syncElasticSearchAzureAiSearch = async (req, res) => {
 };
 
 exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
+  const indexName = ("tenant_" + req.coid).toLowerCase();
   let filter = "";
   let filter_of_title = "";
   let filter_of_description = "";
   let filter_of_content = "";
-  const indexName = req.params.indexName;
+  let filter_of_category = "";
   const query = req.body.query;
   const title = req.body.title ? req.body.title : "";
   const description = req.body.description ? req.body.description : "";
@@ -674,6 +717,41 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   }
 
   try {
+    // Retrieve categories associated with the user from "category-user" index
+    const categoryResponse = await client.search({
+      index: `category_user_${req.coid.toLowerCase()}`,
+      body: {
+        query: {
+          match: {
+            user: req.userId, // Match the userId in the category-user index
+          },
+        },
+      },
+    });
+
+    // Extract the categories from the category-user index response
+    const userCategories = categoryResponse.hits.hits.flatMap((hit) =>
+      hit._source.categories.split(",").map((category) => category.trim())
+    );
+
+    // If the user has no associated categories, return an empty response
+    if (userCategories.length === 0) {
+      return res.status(200).json({
+        message: "No categories found for the user",
+        results: [],
+      });
+    } else {
+      filter_of_category = userCategories
+        .map((category) => `category eq '${category}'`)
+        .join(" or ");
+
+      if (filter.length === 0) {
+        filter = filter_of_category;
+      } else if (filter.length > 0) {
+        filter = filter + " and " + filter_of_category;
+      }
+    }
+
     const response = await axios.post(
       `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2021-04-30-Preview`,
       {
@@ -681,7 +759,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         filter: filter, // Add filter query here
         searchMode: "any", // Allows matching on any term within the query
         queryType: "simple", // Enables full query parsing for complex queries
-        top: 10, // Number of results to return
+        top: 30, // Number of results to return
         count: true, // Return count of results
       },
       {

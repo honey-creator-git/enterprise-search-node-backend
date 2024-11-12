@@ -8,10 +8,18 @@ const router = express.Router();
 
 // Route for NLP / Semantic Search (accessible by all roles)
 router.post(
-  "/:indexName",
+  "/",
   setRoleMiddleware,
   checkViewerAccess,
   documentController.searchDocumentsFromAzureAIIndex
+);
+
+// Route to delete a document by ID from an index of Azure Cognitive Search
+router.delete(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.deleteDocumentFromAzureSearch
 );
 
 module.exports = router;
