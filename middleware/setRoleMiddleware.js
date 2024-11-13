@@ -12,16 +12,22 @@ const setRoleMiddleware = (req, res, next) => {
     const decodedToken = jwt.decode(token);
     if (!decodedToken) return res.status(401).send("Invalid token");
 
-    req.adminRole = decodedToken.groups.join(", ").includes("Admin") ? true: false;
+    req.adminRole = decodedToken.groups.join(", ").includes("Admin")
+      ? true
+      : false;
 
     req.userId = decodedToken["uoid"]; // Get uoid from token
     req.coid = decodedToken["coid"]; // Get coid from token
+
+    console.log("Tenant ID => ", req.coid);
 
     req.name = decodedToken["name"]; // Get name from token
     req.email = decodedToken["email"]; // Get email from token
 
     req.permissions = decodedToken["permissions"].join(", ");
     req.groups = decodedToken["groups"].join(", ");
+
+    console.log("Permissions => ", req.permissions);
 
     // Check if "groups" includes "Admin"
     const groups = decodedToken.groups || [];

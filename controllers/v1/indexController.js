@@ -389,7 +389,7 @@ exports.createNewCategory = async (req, res) => {
       const esResponse = await client.index({
         index: indexName,
         body: {
-          name: document.name,
+          name: name,
           tenantId: `tenant_${req.coid.toLowerCase()}`,
         },
       });
