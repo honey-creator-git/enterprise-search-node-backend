@@ -1236,3 +1236,9 @@ exports.addNewDocumentWithCategoryId = async (req, res) => {
     });
   }
 };
+
+exports.monitorToolRoutes = (req, res) => {
+  res.status(200).json({
+    message: "Successful Monitor Tool Test",
+  });
+};
