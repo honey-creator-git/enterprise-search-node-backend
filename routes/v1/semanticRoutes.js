@@ -15,19 +15,19 @@ router.post(
 );
 
 // Route to delete a document by ID from an index of Azure Cognitive Search
-router.delete(
-  "/",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.deleteDocumentFromAzureSearch
-);
+// router.delete(
+//   "/",
+//   setRoleMiddleware,
+//   checkAdminAccess,
+//   documentController.deleteDocumentFromAzureSearch
+// );
 
 // Route to update a document by ID from an index of Azure Cognitive Search
-router.put(
-  "/",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.updateDocumentInAzureSearch
-);
+// router.put(
+//   "/",
+//   setRoleMiddleware,
+//   checkAdminAccess,
+//   documentController.updateDocumentInAzureSearch
+// );
 
 module.exports = router;

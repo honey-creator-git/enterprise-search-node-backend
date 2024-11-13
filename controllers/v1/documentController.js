@@ -1132,3 +1132,108 @@ exports.getAllUsersFromTenant = async (req, res) => {
     });
   }
 };
+
+exports.getDocumentsWithCategoryId = async (req, res) => {
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const categoryId = req.query.categoryId;
+
+  if (!categoryId) {
+    return res.status(400).json({ message: "Category ID is required" });
+  }
+
+  try {
+    const filter = `category eq '${categoryId}'`; // Filter documents by category ID
+
+    const response = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2021-04-30-Preview`,
+      {
+        search: "*", // Using wildcard to retrieve all documents in the index
+        filter: filter,
+        searchMode: "any",
+        queryType: "simple",
+        top: 1000, // Adjust as needed, or implement pagination for larger datasets
+        count: true,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    res.status(200).json({
+      message: `Fetched documents from Azure AI Service ${indexName} for category ${categoryId}.`,
+      total: response.data.value.length,
+      documents: response.data.value, // Return only document sources
+    });
+  } catch (error) {
+    console.error(
+      "Error retrieving documents:",
+      error.response ? error.response.data : error.message
+    );
+    res.status(500).json({
+      message: "Failed to retrieve documents",
+      error: error.message,
+    });
+  }
+};
+
+exports.addNewDocumentWithCategoryId = async (req, res) => {
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  const { title, description, image, content, categoryId } = req.body;
+
+  if (!title || !description || !image || !content || !categoryId) {
+    return res.status(400).json({
+      message:
+        "All fields (title, description, image, content, categoryId) are required",
+    });
+  }
+
+  try {
+    // Construct the document object
+    const document = {
+      // Assuming you are using an ID; otherwise, Azure Search can generate one for you
+      id: `${indexName}-${Date.now()}`, // Unique ID for the document (or specify your own)
+      title: title,
+      description: description,
+      image: image,
+      content: content,
+      category: categoryId, // Add the category ID here
+    };
+
+    // Send the document to Azure Cognitive Search
+    const response = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2021-04-30-Preview`,
+      {
+        value: [
+          {
+            ...document,
+            "@search.action": "upload", // Use "upload" to add a new document or overwrite if it exists
+          },
+        ],
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    res.status(200).json({
+      message: `Document added successfully to index ${indexName}.`,
+      documentId: document.id,
+      data: response.data, // Return the response from Azure Search for confirmation
+    });
+  } catch (error) {
+    console.error(
+      "Error adding document to index:",
+      error.response ? error.response.data : error.message
+    );
+    res.status(500).json({
+      message: "Failed to add document to index",
+      error: error.message,
+    });
+  }
+};

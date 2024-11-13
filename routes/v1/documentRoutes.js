@@ -22,28 +22,28 @@ router.get(
 // );
 
 // Route to search documents with keyword and advanced query support (accessible by all roles)
-router.post(
-  "/",
-  setRoleMiddleware,
-  checkViewerAccess,
-  documentController.searchDocuments
-);
+// router.post(
+//   "/",
+//   setRoleMiddleware,
+//   checkViewerAccess,
+//   documentController.searchDocuments
+// );
 
 // Route to update a document by ID from an index (accessible by admin)
-router.put(
-  "/",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.updateDocument
-);
+// router.put(
+//   "/",
+//   setRoleMiddleware,
+//   checkAdminAccess,
+//   documentController.updateDocument
+// );
 
 // Route to retrieve a document by ID from an index (accessible by all roles)
-router.get(
-  "/",
-  setRoleMiddleware,
-  checkViewerAccess,
-  documentController.getDocument
-);
+// router.get(
+//   "/",
+//   setRoleMiddleware,
+//   checkViewerAccess,
+//   documentController.getDocument
+// );
 
 // Route to delete a document by ID from an index (only accessible by admin)
 router.delete(
@@ -51,6 +51,38 @@ router.delete(
   setRoleMiddleware,
   checkAdminAccess,
   documentController.deleteDocument
+);
+
+// Route to get documents with category ID
+router.get(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getDocumentsWithCategoryId
+);
+
+// Route to update a document by ID from an index of Azure Cognitive Search
+router.put(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.updateDocumentInAzureSearch
+);
+
+// Route to delete a document by ID from an index of Azure Cognitive Search
+router.delete(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.deleteDocumentFromAzureSearch
+);
+
+// Route to add a new document to the Azure Cognitive Search index
+router.post(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.addNewDocumentWithCategoryId
 );
 
 module.exports = router;
