@@ -308,63 +308,69 @@ exports.updateCategoryUser = async (req, res) => {
   const { categories } = req.body; // Get comma-separated list of categories from request body
 
   try {
-    if (!categories || categories.trim() === "") {
-      // If categories is an empty string, remove all category associations for this user
-      await client.deleteByQuery({
+    if (!!userId) {
+      if (!categories || categories.trim() === "") {
+        // If categories is an empty string, remove all category associations for this user
+        await client.deleteByQuery({
+          index: `category_user_${req.coid.toLowerCase()}`,
+          body: {
+            query: {
+              term: { user: userId },
+            },
+          },
+        });
+
+        return res.status(200).json({
+          message: `All categories removed for user ${userId}.`,
+        });
+      }
+
+      // Split the categories string into an array
+      const categoryList = categories
+        .split(",")
+        .map((category) => category.trim());
+
+      // Check if the user already exists in the index
+      const searchResponse = await client.search({
         index: `category_user_${req.coid.toLowerCase()}`,
         body: {
           query: {
-            term: { user: userId },
+            match: { user: userId },
           },
         },
       });
 
-      return res.status(200).json({
-        message: `All categories removed for user ${userId}.`,
-      });
-    }
-
-    // Split the categories string into an array
-    const categoryList = categories
-      .split(",")
-      .map((category) => category.trim());
-
-    // Check if the user already exists in the index
-    const searchResponse = await client.search({
-      index: `category_user_${req.coid.toLowerCase()}`,
-      body: {
-        query: {
-          match: { user: userId },
-        },
-      },
-    });
-
-    if (searchResponse.hits.total.value > 0) {
-      // User exists, so update their categories
-      const existingDoc = searchResponse.hits.hits[0];
-      await client.update({
-        index: `category_user_${req.coid.toLowerCase()}`,
-        id: existingDoc._id,
-        body: {
-          doc: {
+      if (searchResponse.hits.total.value > 0) {
+        // User exists, so update their categories
+        const existingDoc = searchResponse.hits.hits[0];
+        await client.update({
+          index: `category_user_${req.coid.toLowerCase()}`,
+          id: existingDoc._id,
+          body: {
+            doc: {
+              categories: categoryList.join(", "),
+            },
+          },
+        });
+      } else {
+        // User does not exist, create a new document with the user and categories
+        await client.index({
+          index: `category_user_${req.coid.toLowerCase()}`,
+          body: {
+            user: userId,
             categories: categoryList.join(", "),
           },
-        },
+        });
+      }
+
+      res.status(200).json({
+        message: `Categories for user ${userId} updated successfully.`,
       });
     } else {
-      // User does not exist, create a new document with the user and categories
-      await client.index({
-        index: `category_user_${req.coid.toLowerCase()}`,
-        body: {
-          user: userId,
-          categories: categoryList.join(", "),
-        },
+      res.status(400).json({
+        message: `User's uoid must be set!`,
       });
     }
-
-    res.status(200).json({
-      message: `Categories for user ${userId} updated successfully.`,
-    });
   } catch (error) {
     console.error("Error updating categories for user: ", error);
     res.status(500).json({
