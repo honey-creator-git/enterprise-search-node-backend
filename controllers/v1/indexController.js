@@ -428,3 +428,29 @@ exports.deleteCategory = async (req, res) => {
     });
   }
 };
+
+exports.updateCategory = async (req, res) => {
+  const categoryIndex = `categories_${req.coid.toLowerCase()}`;
+  const categoryId = req.params.categoryId;
+
+  try {
+    const response = await client.update({
+      index: categoryIndex,
+      id: categoryId,
+      body: {
+        doc: req.body,
+      },
+    });
+
+    res.status(200).json({
+      message: `Category with ID "${categoryId}" updated successfully in index ${categoryIndex}.`,
+      response: response,
+    });
+  } catch (error) {
+    console.error("Error updating category: ", error);
+    res.status(500).json({
+      error: "Failed to update category",
+      details: error.message,
+    });
+  }
+};

@@ -29,6 +29,14 @@ router.post(
   indexController.createNewCategory
 );
 
+// Route to update category with categoryId
+router.put(
+  "/:categoryId",
+  setRoleMiddleware,
+  checkAdminAccess,
+  indexController.updateCategory
+);
+
 // Route to delete a category with id
 router.delete(
   "/:categoryId",
