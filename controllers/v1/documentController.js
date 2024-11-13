@@ -1183,10 +1183,9 @@ exports.addNewDocumentWithCategoryId = async (req, res) => {
   const indexName = ("tenant_" + req.coid).toLowerCase();
   const { title, description, image, content, categoryId } = req.body;
 
-  if (!title || !description || !image || !content || !categoryId) {
+  if (!title || !description || !content || !categoryId) {
     return res.status(400).json({
-      message:
-        "All fields (title, description, image, content, categoryId) are required",
+      message: "Fields (title, description, content, categoryId) are required",
     });
   }
 
@@ -1197,7 +1196,7 @@ exports.addNewDocumentWithCategoryId = async (req, res) => {
       id: `${indexName}-${Date.now()}`, // Unique ID for the document (or specify your own)
       title: title,
       description: description,
-      image: image,
+      image: !!image ? image : "https://randomuser.me/api/portraits/men/1.jpg",
       content: content,
       category: categoryId, // Add the category ID here
     };
