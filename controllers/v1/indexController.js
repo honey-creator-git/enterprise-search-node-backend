@@ -373,3 +373,29 @@ exports.updateCategoryUser = async (req, res) => {
     });
   }
 };
+
+exports.createNewCategory = async (req, res) => {
+  const indexName = `categories_${req.coid.toLowerCase()}`;
+  const document = req.body;
+
+  try {
+    const esResponse = await client.index({
+      index: indexName,
+      body: {
+        name: document.name,
+        tenantId: `tenant_${req.coid.toLowerCase()}`,
+      },
+    });
+
+    res.status(201).json({
+      message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
+      elasticsearchResponse: esResponse,
+    });
+  } catch (error) {
+    console.error("Error adding new category: ", error);
+    res.status(500).json({
+      error: "Failed to add new category",
+      details: error.message,
+    });
+  }
+};

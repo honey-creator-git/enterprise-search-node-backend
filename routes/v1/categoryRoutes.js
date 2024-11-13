@@ -21,4 +21,12 @@ router.put(
   indexController.updateCategoryUser
 );
 
+// Route to add new category
+router.post(
+  "/",
+  setRoleMiddleware,
+  checkAdminAccess,
+  indexController.createNewCategory
+);
+
 module.exports = router;
