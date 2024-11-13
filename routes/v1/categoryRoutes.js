@@ -29,4 +29,12 @@ router.post(
   indexController.createNewCategory
 );
 
+// Route to delete a category with id
+router.delete(
+  "/:categoryId",
+  setRoleMiddleware,
+  checkAdminAccess,
+  indexController.deleteCategory
+);
+
 module.exports = router;

@@ -405,3 +405,26 @@ exports.createNewCategory = async (req, res) => {
     });
   }
 };
+
+exports.deleteCategory = async (req, res) => {
+  const categoryIndex = `categories_${req.coid.toLowerCase()}`;
+  const categoryId = req.params.categoryId;
+
+  try {
+    const response = await client.delete({
+      index: categoryIndex,
+      id: categoryId,
+    });
+
+    res.status(200).json({
+      message: `Category with ID "${categoryId}" deleted successfully from index ${categoryIndex}.`,
+      response: response,
+    });
+  } catch (error) {
+    console.error("Error deleting category: ", error);
+    res.status(500).json({
+      error: "Failed to delete category",
+      details: error.message,
+    });
+  }
+};
