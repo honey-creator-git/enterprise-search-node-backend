@@ -897,30 +897,33 @@ exports.getAllCategoriesForTenant = async (req, res) => {
 };
 
 const createIndexIfNotExists = async (client, indexName, mapping) => {
-  const { body: exists } = await client.indices.exists({ index: indexName });
+  try {
+    const { body: exists } = await client.indices.exists({ index: indexName });
 
-  if (!exists) {
-    console.log(`Index ${indexName} does not exist. Creating...`);
+    if (!exists) {
+      console.log(`Index ${indexName} does not exist. Creating...`);
 
-    // Create the index
-    await client.indices.create({
-      index: indexName,
-      body: {
-        settings: {
-          number_of_shards: 1,
-          number_of_replicas: 1,
-        },
-        ...mapping,
-      },
-    });
+      // Attempt to create the index
+      await client.indices.create({
+        index: indexName,
+        body: mapping,
+      });
 
-    console.log(`Index ${indexName} created successfully.`);
-
-    // Force a refresh to make the index available immediately
-    await client.indices.refresh({ index: indexName });
-    console.log(`Index ${indexName} has been refreshed and is now available.`);
-  } else {
-    console.log(`Index ${indexName} already exists.`);
+      console.log(`Index ${indexName} created successfully.`);
+    } else {
+      console.log(`Index ${indexName} already exists.`);
+    }
+  } catch (error) {
+    if (
+      error.meta &&
+      error.meta.body &&
+      error.meta.body.error.type === "resource_already_exists_exception"
+    ) {
+      console.log(`Index ${indexName} already exists. Ignoring error.`);
+    } else {
+      console.error(`Failed to check or create index ${indexName}:`, error);
+      throw error; // Rethrow the error if it’s not related to index existence
+    }
   }
 };
 
@@ -939,14 +942,8 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   let esResponse;
   let categoryResponse;
 
-  // const searchClientForNewDocument = new SearchClient(
-  //   process.env.AZURE_SEARCH_ENDPOINT,
-  //   indexName,
-  //   new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
-  // );
-
   try {
-    // Define mappings for each index
+    // Define mappings for Elasticsearch indices
     const usersIndexMapping = {
       mappings: {
         properties: {
@@ -991,8 +988,8 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       categoryUserIndexMapping
     );
 
-    // Define Azure AI Search index Schema based on documentFields
-    let auzreFields = [
+    // Define Azure AI Search index schema
+    let azureFields = [
       { name: "id", type: "Edm.String", key: true, searchable: false },
     ];
 
@@ -1034,12 +1031,11 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     ];
 
-    auzreFields = auzreFields.concat(tempAzureFields);
+    azureFields = azureFields.concat(tempAzureFields);
 
-    // Define indexSchema for the new index of Azure AI Search
     const azureIndexSchema = {
       name: tenantIndexName,
-      fields: auzreFields,
+      fields: azureFields,
       suggesters: [
         {
           name: "sg",
@@ -1059,7 +1055,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
           {
             name: "es-semantic-config",
             prioritizedFields: {
-              titleField: { fieldName: tempAzureFields[0].name }, // Assuming the first field is title
+              titleField: { fieldName: tempAzureFields[0].name },
               prioritizedContentFields: tempAzureFields.map((field) => ({
                 fieldName: field.name,
               })),
@@ -1073,19 +1069,35 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       charFilters: [],
     };
 
-    // Check if the tenant index exists in Azure Cognitive Search
+    // Initialize Azure Cognitive Search client
     const searchClientForTenant = new SearchIndexClient(
       process.env.AZURE_SEARCH_ENDPOINT,
       new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
     );
 
-    const azureResponse = await searchClientForTenant.createIndex(
-      azureIndexSchema
-    );
+    // Check if the tenant index exists in Azure Cognitive Search
+    let azureResponse;
+    try {
+      await searchClientForTenant.getIndex(tenantIndexName);
+      console.log(`Azure index ${tenantIndexName} already exists.`);
+    } catch (error) {
+      if (error.statusCode === 404) {
+        console.log(
+          `Azure index ${tenantIndexName} does not exist. Creating...`
+        );
+        azureResponse = await searchClientForTenant.createIndex(
+          azureIndexSchema
+        );
+        console.log(`Azure index ${tenantIndexName} created successfully.`);
+      } else {
+        console.error("Azure Cognitive Search error:", error);
+        throw error;
+      }
+    }
 
-    // Search for categories with the specified tenantId
+    // Search for categories with the specified tenantId in Elasticsearch
     const response = await client.search({
-      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
+      index: categoriesIndexName,
       body: {
         query: {
           term: {
@@ -1095,17 +1107,15 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     });
 
-    // Extract the categories from the response
-    const categories = await Promise.all(
-      response.hits.hits.map((hit) => ({
-        id: hit._id,
-        name: hit._source.name,
-      }))
-    );
+    // Extract categories from response
+    const categories = response.hits.hits.map((hit) => ({
+      id: hit._id,
+      name: hit._source.name,
+    }));
 
-    const defaultCategory = !!categories[0] ? categories[0].id : "";
+    const defaultCategory = categories[0]?.id || "";
 
-    // Check if the user already exists in the index
+    // Check if the user already exists in the users index
     const searchResponse = await client.search({
       index: indexName,
       body: {
@@ -1116,7 +1126,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     });
 
     if (searchResponse.hits.total.value > 0) {
-      // Use exists, so update their values
+      // If user exists, update their information
       const existingDoc = searchResponse.hits.hits[0];
       esResponse = await client.update({
         index: indexName,
@@ -1133,7 +1143,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
         },
       });
     } else {
-      // Add the document to the Elastic Search index
+      // Add the new user document to the users index in Elasticsearch
       esResponse = await client.index({
         index: indexName,
         body: {
@@ -1147,7 +1157,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       });
     }
 
-    // Check if the user category exists in the category_user index
+    // Check if user category exists in category_user index and add if not
     const categorySearchResponse = await client.search({
       index: categoryIndexName,
       body: {
@@ -1157,11 +1167,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     });
 
-    if (
-      categorySearchResponse.hits.total.value === 0 &&
-      defaultCategory !== ""
-    ) {
-      // No category found for the user, so create a new document with a default category
+    if (categorySearchResponse.hits.total.value === 0 && defaultCategory) {
       categoryResponse = await client.index({
         index: categoryIndexName,
         body: {
@@ -1171,28 +1177,13 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       });
     }
 
-    // const azDocument = {
-    //   id: esResponse._id.slice(1),
-    //   name: name,
-    //   email: email,
-    //   coid: coid,
-    //   uoid: uoid,
-    //   groups: groups,
-    //   permissions: permissions,
-    // };
-
-    // Add the document to the Azure Cognitive Search
-    // const azResponse = await searchClientForNewDocument.uploadDocuments([
-    //   azDocument,
-    // ]);
-
     res.status(201).json({
-      message: `user information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
+      message: `User information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
       elasticsearchResponse: esResponse,
       azureResponse: azureResponse,
     });
   } catch (error) {
-    console.error("Error saving user: ", error);
+    console.error("Error saving user:", error);
     res.status(500).json({
       error: "Failed to save user",
       details: error.message,
