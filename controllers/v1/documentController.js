@@ -828,21 +828,8 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
 // Controller to retrieve all categories associated with a specific user ID
 exports.getUserCategories = async (req, res) => {
   const userId = req.query.userId; // User ID from the request parameters
-  const tenantId = ("tenant_" + req.coid).toLowerCase();
 
   try {
-    // Search for categories with the specified tenantId
-    const allCategoriesResponse = await client.search({
-      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
-      body: {
-        query: {
-          term: {
-            tenantId: tenantId, // Filter by tenantId
-          },
-        },
-      },
-    });
-
     // Search in the "category-user" index for documents that include the userId in the "user" field
     const categoryResponse = await client.search({
       index: `category_user_${req.coid.toLowerCase()}`,
@@ -858,29 +845,10 @@ exports.getUserCategories = async (req, res) => {
       hit._source.categories.split(",").map((category) => category.trim())
     );
 
-    const categoriesForUser = [...new Set(userCategories)].join(", ");
-
-    // Extract the categories from the all categories response
-    const allCategories = allCategoriesResponse.hits.hits.map((hit) => {
-      if (categoriesForUser.includes(hit._id)) {
-        return {
-          id: hit._id,
-          name: hit._source.name,
-          isAllowed: true,
-        };
-      } else {
-        return {
-          id: hit._id,
-          name: hit._source.name,
-          isAlloed: false,
-        };
-      }
-    });
-
     // Return the unique categories associated with the user
     res.status(200).json({
       message: `Categories for user ${userId} retrieved successfully`,
-      categories: allCategories, // Remove duplicates if any
+      categories: [...new Set(userCategories)], // Remove duplicates if any
     });
   } catch (error) {
     console.error("Error retrieving user categories: ", error);
@@ -1063,8 +1031,27 @@ exports.getAllUsersFromTenant = async (req, res) => {
   const indexName = ("users_" + req.coid).toLowerCase();
   const from = parseInt(req.query.from, 10) || 0; // Default to 0 if not provided
   const size = parseInt(req.query.size, 10) || 10000; // Default to 10 if not provided
+  const tenantId = ("tenant_" + req.coid).toLowerCase();
 
   try {
+    // Search for categories with the specified tenantId
+    const categoriesFromTenant = await client.search({
+      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
+      body: {
+        query: {
+          term: {
+            tenantId: tenantId, // Filter by tenantId
+          },
+        },
+      },
+    });
+
+    // Extract the categories from the response
+    const allCategories = categoriesFromTenant.hits.hits.map((hit) => ({
+      id: hit._id,
+      name: hit._source.name,
+    }));
+
     // Construct the query to get all users
     const searchQuery = {
       index: indexName,
@@ -1103,13 +1090,31 @@ exports.getAllUsersFromTenant = async (req, res) => {
               .map((category) => category.trim())
         );
 
+        const filteredUserCategories = [...new Set(userCategories)].join(", ");
+
+        const mappedCategories = allCategories.map((category) => {
+          if (filteredUserCategories.includes(category.id)) {
+            return {
+              id: category.id,
+              name: category.name,
+              isAllowed: true,
+            };
+          } else {
+            return {
+              id: category.id,
+              name: category.name,
+              isAllowed: false,
+            };
+          }
+        });
+
         return {
           id: hit._id, // Include the document ID
           name: hit._source.name,
           email: hit._source.email,
           coid: hit._source.coid,
           uoid: hit._source.uoid,
-          categories: userCategories,
+          categories: mappedCategories,
         };
       })
     );
