@@ -777,20 +777,22 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
     );
 
     // If the user has no associated categories, return an empty response
-    if (userCategories.length === 0) {
+    if (req.adminRole === false && userCategories.length === 0) {
       return res.status(200).json({
         message: "No categories found for the user",
         results: [],
       });
     } else {
-      filter_of_category = userCategories
-        .map((category) => `category eq '${category}'`)
-        .join(" or ");
+      if (req.adminRole === false) {
+        filter_of_category = userCategories
+          .map((category) => `category eq '${category}'`)
+          .join(" or ");
 
-      if (filter.length === 0) {
-        filter = filter_of_category;
-      } else if (filter.length > 0) {
-        filter = filter + " and " + filter_of_category;
+        if (filter.length === 0) {
+          filter = filter_of_category;
+        } else if (filter.length > 0) {
+          filter = filter + " and " + filter_of_category;
+        }
       }
     }
 
