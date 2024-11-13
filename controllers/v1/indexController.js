@@ -382,21 +382,27 @@ exports.updateCategoryUser = async (req, res) => {
 
 exports.createNewCategory = async (req, res) => {
   const indexName = `categories_${req.coid.toLowerCase()}`;
-  const document = req.body;
+  const { name } = req.body;
 
   try {
-    const esResponse = await client.index({
-      index: indexName,
-      body: {
-        name: document.name,
-        tenantId: `tenant_${req.coid.toLowerCase()}`,
-      },
-    });
+    if (!!name && name.length > 0) {
+      const esResponse = await client.index({
+        index: indexName,
+        body: {
+          name: document.name,
+          tenantId: `tenant_${req.coid.toLowerCase()}`,
+        },
+      });
 
-    res.status(201).json({
-      message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
-      elasticsearchResponse: esResponse,
-    });
+      res.status(201).json({
+        message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
+        elasticsearchResponse: esResponse,
+      });
+    } else {
+      res.status(400).json({
+        message: `Document name must be set.`,
+      });
+    }
   } catch (error) {
     console.error("Error adding new category: ", error);
     res.status(500).json({
