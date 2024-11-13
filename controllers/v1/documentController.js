@@ -214,7 +214,7 @@ exports.updateDocumentInAzureSearch = async (req, res) => {
         {
           "@search.action": "merge", // Use merge to update specific fields
           id: documentId, // Replace "id" with the actual key field name in your index schema
-          ...updatedFields, // Spread the updated fields into the documentt
+          ...updatedFields, // Spread the updated fields into the documenttt
         },
       ],
     };
