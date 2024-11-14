@@ -7,8 +7,19 @@ const generateEmbedding = require("../../embedding").generateEmbedding;
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
 const WebSocket = require("ws");
-const broadcastToAdmins = require("./../../websocketserver").broadcastToAdmins;
+const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
+const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
+
+// Connect to the WebSocket server
+ws.on("open", () => {
+  console.log("Connected to WebSocket server");
+});
+
+// Handle errors
+ws.on("error", (error) => {
+  console.error("WebSocket error:", error);
+});
 
 const searchIndexClient = new SearchIndexClient(
   process.env.AZURE_SEARCH_ENDPOINT,
@@ -1250,7 +1261,10 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     };
 
     // Call broadcastToAdmins to send the message to all connected admin clients
-    broadcastToAdmins(adminMessage);
+    // broadcastToAdmins(adminMessage);
+
+    // Send the message to the WebSocket server
+    ws.send(JSON.stringify(adminMessage));
     // }
 
     res.status(201).json({
@@ -1515,7 +1529,9 @@ exports.getDocumentById = async (req, res) => {
 };
 
 exports.monitorToolRoutes = (req, res) => {
-  const ws = new WebSocket("wss://es-services.onrender.com");
+  const ws = new WebSocket(
+    "wss://enterprise-search-node-websocket.onrender.com"
+  );
 
   ws.onopen = () => {
     // Send a message to the server to set the client's role as Admin
