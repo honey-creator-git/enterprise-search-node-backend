@@ -1232,25 +1232,25 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
     // Step 3: Trigger WebSocket event for admin users if user is new
     // if (isNewUser) {
-      // Fetch all admin users from the index
-      // const adminUsersResponse = await client.search({
-      //   index: indexName,
-      //   body: {
-      //     query: {
-      //       match_phrase: { groups: "Admin" },
-      //     },
-      //   },
-      // });
+    // Fetch all admin users from the index
+    // const adminUsersResponse = await client.search({
+    //   index: indexName,
+    //   body: {
+    //     query: {
+    //       match_phrase: { groups: "Admin" },
+    //     },
+    //   },
+    // });
 
-      // Prepare the message for the new user
-      const adminMessage = {
-        type: "Update-User",
-        newUser: { name, email, coid, uoid },
-        message: `A new user has been added: ${name} (${email})`,
-      };
+    // Prepare the message for the new user
+    const adminMessage = {
+      type: "Update-User",
+      newUser: { name, email, coid, uoid },
+      message: `A new user has been added: ${name} (${email})`,
+    };
 
-      // Call broadcastToAdmins to send the message to all connected admin clients
-      broadcastToAdmins(adminMessage);
+    // Call broadcastToAdmins to send the message to all connected admin clients
+    broadcastToAdmins(adminMessage);
     // }
 
     res.status(201).json({
@@ -1515,6 +1515,18 @@ exports.getDocumentById = async (req, res) => {
 };
 
 exports.monitorToolRoutes = (req, res) => {
+  const ws = new WebSocket("wss://es-services.onrender.com");
+
+  ws.onopen = () => {
+    // Send a message to the server to set the client's role as Admin
+    ws.send(JSON.stringify({ type: "SET_ROLE", role: "Admin" }));
+  };
+
+  ws.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    console.log("Received message:", message);
+  };
+
   res.status(200).json({
     message: "Successful Monitor Tool Test",
   });
