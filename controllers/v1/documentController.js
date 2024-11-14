@@ -1529,20 +1529,6 @@ exports.getDocumentById = async (req, res) => {
 };
 
 exports.monitorToolRoutes = (req, res) => {
-  const ws = new WebSocket(
-    "wss://enterprise-search-node-websocket.onrender.com"
-  );
-
-  ws.onopen = () => {
-    // Send a message to the server to set the client's role as Admin
-    ws.send(JSON.stringify({ type: "SET_ROLE", role: "Admin" }));
-  };
-
-  ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    console.log("Received message:", message);
-  };
-
   res.status(200).json({
     message: "Successful Monitor Tool Test",
   });
