@@ -404,7 +404,7 @@ exports.createNewCategory = async (req, res) => {
         index: usersIndexName,
         body: {
           query: {
-            match: { groups: "Admin" }, // Assuming "admin" is the permission identifier for admin users
+            match_phrase: { groups: "Admin" }, // Assuming "admin" is the permission identifier for admin users
           },
         },
       });
