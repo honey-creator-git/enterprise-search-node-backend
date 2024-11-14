@@ -1255,7 +1255,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
     // Prepare the message for the new user
     const adminMessage = {
-      type: "Update-User",
+      type: "update-user",
       newUser: { name, email, coid, uoid },
       message: `A new user has been added: ${name} (${email})`,
     };
