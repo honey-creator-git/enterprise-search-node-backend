@@ -1115,6 +1115,10 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
     const defaultCategory = categories[0]?.id || "";
 
+    const allCategoriesForAdmin = categories
+      .map((category) => category.id)
+      .join(", ");
+
     // Check if the user already exists in the users index
     const searchResponse = await client.search({
       index: indexName,
@@ -1168,13 +1172,23 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     });
 
     if (categorySearchResponse.hits.total.value === 0 && defaultCategory) {
-      categoryResponse = await client.index({
-        index: categoryIndexName,
-        body: {
-          user: uoid,
-          categories: defaultCategory,
-        },
-      });
+      if (req.adminRole === true) {
+        categoryResponse = await client.index({
+          index: categoryIndexName,
+          body: {
+            user: uoid,
+            categories: allCategoriesForAdmin,
+          },
+        });
+      } else {
+        categoryResponse = await client.index({
+          index: categoryIndexName,
+          body: {
+            user: uoid,
+            categories: defaultCategory,
+          },
+        });
+      }
     }
 
     res.status(201).json({

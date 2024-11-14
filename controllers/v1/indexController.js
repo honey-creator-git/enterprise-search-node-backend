@@ -381,22 +381,83 @@ exports.updateCategoryUser = async (req, res) => {
 };
 
 exports.createNewCategory = async (req, res) => {
-  const indexName = `categories_${req.coid.toLowerCase()}`;
+  const categoriesIndexName = `categories_${req.coid.toLowerCase()}`;
+  const categoryUserIndexName = `category_user_${req.coid.toLowerCase()}`;
+  const usersIndexName = `users_${req.coid.toLowerCase()}`;
   const { name } = req.body;
 
   try {
     if (!!name && name.length > 0) {
-      const esResponse = await client.index({
-        index: indexName,
+      // Step 1: Create the new category in the categories index
+      const categoryResponse = await client.index({
+        index: categoriesIndexName,
         body: {
           name: name,
           tenantId: `tenant_${req.coid.toLowerCase()}`,
         },
       });
 
+      const newCategoryId = categoryResponse._id;
+
+      // Step 2: Retrieve admin users from the users index
+      const adminUsersResponse = await client.search({
+        index: usersIndexName,
+        body: {
+          query: {
+            match: { groups: "Admin" }, // Assuming "admin" is the permission identifier for admin users
+          },
+        },
+      });
+
+      // Step 3: Assign the new category to each admin user in category_user index
+      const adminUsers = adminUsersResponse.hits.hits;
+
+      for (const user of adminUsers) {
+        const userId = user._source.uoid;
+
+        // Retrieve the existing categories for this user in category_user index
+        const categoryUserResponse = await client.search({
+          index: categoryUserIndexName,
+          body: {
+            query: {
+              term: { user: userId },
+            },
+          },
+        });
+
+        let existingCategories = [];
+
+        if (categoryUserResponse.hits.total.value > 0) {
+          // If a record already exists for this user, retrieve the categories
+          const existingCategoriesStr =
+            categoryUserResponse.hits.hits[0]._source.categories || "";
+          existingCategories = existingCategoriesStr
+            .split(",")
+            .map((cat) => cat.trim());
+        }
+
+        // Append the new category ID if it's not already included
+        if (!existingCategories.includes(newCategoryId)) {
+          existingCategories.push(newCategoryId);
+        }
+
+        // Update or create the entry in category_user index for this user
+        await client.index({
+          index: categoryUserIndexName,
+          id:
+            categoryUserResponse.hits.total.value > 0
+              ? categoryUserResponse.hits.hits[0]._id
+              : undefined,
+          body: {
+            user: userId,
+            categories: existingCategories.join(","),
+          },
+        });
+      }
+
       res.status(201).json({
         message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
-        elasticsearchResponse: esResponse,
+        elasticsearchResponse: categoryResponse,
       });
     } else {
       res.status(400).json({
