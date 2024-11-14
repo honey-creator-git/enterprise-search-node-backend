@@ -85,4 +85,12 @@ router.post(
   documentController.addNewDocumentWithCategoryId
 );
 
+// Route to get the details of a document with document id
+router.get(
+  "/:documentId",
+  setRoleMiddleware,
+  checkViewerAccess,
+  documentController.getDocumentById
+);
+
 module.exports = router;

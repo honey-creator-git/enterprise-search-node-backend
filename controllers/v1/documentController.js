@@ -1454,6 +1454,36 @@ exports.addNewDocumentWithCategoryId = async (req, res) => {
   }
 };
 
+exports.getDocumentById = async (req, res) => {
+  const indexName = `tenant_${req.coid.toLowerCase()}`; // Adjust the index name if necessary
+  const documentId = req.params.documentId; // Get the document ID from the request parameters
+
+  try {
+    // Send a GET request to Azure Cognitive Search to fetch the document by its ID
+    const response = await axios.get(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/${documentId}?api-version=2021-04-30-Preview`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    // Respond with the document data
+    res.status(200).json({
+      message: `Document retrieved successfully for ID: ${documentId}`,
+      document: response.data,
+    });
+  } catch (error) {
+    console.error("Error retrieving document: ", error);
+    res.status(500).json({
+      error: "Failed to retrieve document",
+      details: error.response ? error.response.data : error.message,
+    });
+  }
+};
+
 exports.monitorToolRoutes = (req, res) => {
   res.status(200).json({
     message: "Successful Monitor Tool Test",
