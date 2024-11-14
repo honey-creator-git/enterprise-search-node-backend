@@ -1248,6 +1248,9 @@ exports.getAllUsersFromTenant = async (req, res) => {
     // Process each user to add their categories
     const documents = await Promise.all(
       response.hits.hits.map(async (hit) => {
+        // Check if the user is an admin
+        const isAdmin = hit._source.groups.includes("Admin");
+
         // Fetch categories for each user
         const categoryResponse = await client.search({
           index: `category_user_${req.coid.toLowerCase()}`,
@@ -1292,6 +1295,7 @@ exports.getAllUsersFromTenant = async (req, res) => {
           email: hit._source.email,
           coid: hit._source.coid,
           uoid: hit._source.uoid,
+          isAdmin: isAdmin,
           categories: mappedCategories,
         };
       })
