@@ -862,29 +862,61 @@ exports.getUserCategories = async (req, res) => {
 };
 
 exports.getAllCategoriesForTenant = async (req, res) => {
-  const tenantId = ("tenant_" + req.coid).toLowerCase();
+  const indexName = `tenant_${req.coid.toLowerCase()}`; // The name of your Azure Cognitive Search index
 
   try {
-    // Search for categories with the specified tenantId
-    const response = await client.search({
-      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
+    // Step 1: Fetch all documents with the category field from Azure Cognitive Search
+    const response = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2021-04-30-Preview`,
+      {
+        search: "*", // Use wildcard to retrieve all documents
+        filter: "", // Apply any necessary filter
+        searchMode: "any",
+        queryType: "simple",
+        top: 1000, // Adjust as needed, or implement pagination for larger datasets
+        count: true,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    // Step 2: Count documents for each category
+    const documents = response.data.value;
+    const categoryCounts = documents.reduce((acc, doc) => {
+      const categoryId = doc.category;
+      if (categoryId) {
+        acc[categoryId] = (acc[categoryId] || 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    // Step 3: Fetch categories from Elasticsearch and combine with counts
+    const categoriesResponse = await client.search({
+      index: `categories_${req.coid.toLowerCase()}`,
       body: {
         query: {
           term: {
-            tenantId: tenantId, // Filter by tenantId
+            tenantId: indexName,
           },
         },
       },
     });
 
-    // Extract the categories from the response
-    const categories = response.hits.hits.map((hit) => ({
+    const categories = categoriesResponse.hits.hits.map((hit) => ({
       id: hit._id,
       name: hit._source.name,
+      documentCount: categoryCounts[hit._id] || 0, // Use the counted values, defaulting to 0 if no documents
     }));
 
+    // Step 4: Sort categories by document count in descending order
+    categories.sort((a, b) => b.documentCount - a.documentCount);
+
     res.status(200).json({
-      message: `Categories retrieved successfully for tenantId: ${tenantId}`,
+      message: `Categories retrieved successfully for tenantId: ${indexName}`,
       categories: categories,
     });
   } catch (error) {
