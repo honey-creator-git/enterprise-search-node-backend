@@ -1,8 +1,13 @@
+const http = require("http");
 const WebSocket = require("ws");
+const express = require("express");
 
-// Use the PORT environment variable provided by Render, or default to 8080 for local development
-const port = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port });
+const app = express();
+
+// Create an HTTP server using the Express app
+const server = http.createServer(app);
+
+const wss = new WebSocket.Server({ server });
 
 // Store connected clients and their roles
 const clients = [];
@@ -39,5 +44,4 @@ const broadcastToAdmins = (data) => {
   });
 };
 
-console.log(`WebSocket server is running on port ${port}`);
 module.exports = { broadcastToAdmins };
