@@ -1301,6 +1301,9 @@ exports.getAllUsersFromTenant = async (req, res) => {
       })
     );
 
+    // Sort documents to place admin users before non-admin users
+    documents.sort((a, b) => b.isAdmin - a.isAdmin);
+
     res.status(200).json({
       message: `Fetched users from index "${indexName}".`,
       total: response.hits.total.value,
