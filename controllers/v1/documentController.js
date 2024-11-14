@@ -6,6 +6,8 @@ const {
 const generateEmbedding = require("../../embedding").generateEmbedding;
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
+const WebSocket = require("ws");
+const broadcastToAdmins = require("./../../websocketserver").broadcastToAdmins;
 require("dotenv").config();
 
 const searchIndexClient = new SearchIndexClient(
@@ -973,6 +975,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   const permissions = req.permissions;
   let esResponse;
   let categoryResponse;
+  let isNewUser = false;
 
   try {
     // Define mappings for Elasticsearch indices
@@ -1151,7 +1154,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       .map((category) => category.id)
       .join(", ");
 
-    // Check if the user already exists in the users index
+    // Step 1: Check if the user already exists in the users index
     const searchResponse = await client.search({
       index: indexName,
       body: {
@@ -1179,6 +1182,9 @@ exports.decodeUserTokenAndSave = async (req, res) => {
         },
       });
     } else {
+      // If the user is new, set isNewUser flag to true
+      isNewUser = true;
+
       // Add the new user document to the users index in Elasticsearch
       esResponse = await client.index({
         index: indexName,
@@ -1193,7 +1199,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       });
     }
 
-    // Check if user category exists in category_user index and add if not
+    // Step 2: Check if the user category exists in category_user index and add if not (as in your original function)
     const categorySearchResponse = await client.search({
       index: categoryIndexName,
       body: {
@@ -1203,24 +1209,48 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     });
 
-    if (categorySearchResponse.hits.total.value === 0 && defaultCategory) {
-      if (req.adminRole === true) {
-        categoryResponse = await client.index({
-          index: categoryIndexName,
-          body: {
-            user: uoid,
-            categories: allCategoriesForAdmin,
-          },
-        });
-      } else {
-        categoryResponse = await client.index({
-          index: categoryIndexName,
-          body: {
-            user: uoid,
-            categories: defaultCategory,
-          },
-        });
-      }
+    if (req.adminRole === true) {
+      categoryResponse = await client.index({
+        index: categoryIndexName,
+        body: {
+          user: uoid,
+          categories: allCategoriesForAdmin,
+        },
+      });
+    } else if (
+      categorySearchResponse.hits.total.value === 0 &&
+      defaultCategory
+    ) {
+      categoryResponse = await client.index({
+        index: categoryIndexName,
+        body: {
+          user: uoid,
+          categories: defaultCategory,
+        },
+      });
+    }
+
+    // Step 3: Trigger WebSocket event for admin users if user is new
+    if (isNewUser) {
+      // Fetch all admin users from the index
+      // const adminUsersResponse = await client.search({
+      //   index: indexName,
+      //   body: {
+      //     query: {
+      //       match_phrase: { groups: "Admin" },
+      //     },
+      //   },
+      // });
+
+      // Prepare the message for the new user
+      const adminMessage = {
+        type: "Update-User",
+        newUser: { name, email, coid, uoid },
+        message: `A new user has been added: ${name} (${email})`,
+      };
+
+      // Call broadcastToAdmins to send the message to all connected admin clients
+      broadcastToAdmins(adminMessage);
     }
 
     res.status(201).json({

@@ -7,6 +7,7 @@ const categoryRoutes = require("./routes/v1/categoryRoutes");
 const categoryUserRoutes = require("./routes/v1/categoryUserRoutes");
 const userRoutes = require("./routes/v1/userRoutes");
 const monitorToolRoutes = require("./routes/v1/monitorToolRoutes");
+require("./websocketserver");
 
 dotenv.config();
 
