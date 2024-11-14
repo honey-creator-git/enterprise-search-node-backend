@@ -1231,7 +1231,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     }
 
     // Step 3: Trigger WebSocket event for admin users if user is new
-    if (isNewUser) {
+    // if (isNewUser) {
       // Fetch all admin users from the index
       // const adminUsersResponse = await client.search({
       //   index: indexName,
@@ -1251,7 +1251,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
       // Call broadcastToAdmins to send the message to all connected admin clients
       broadcastToAdmins(adminMessage);
-    }
+    // }
 
     res.status(201).json({
       message: `User information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
