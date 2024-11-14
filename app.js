@@ -36,7 +36,7 @@ app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/monitor_tool", monitorToolRoutes);
 
 // Start the server
-const PORT = 3000;
+const PORT = 3200;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
