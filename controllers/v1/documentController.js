@@ -973,9 +973,6 @@ const createIndexIfNotExists = async (client, indexName, mapping) => {
 };
 
 exports.decodeUserTokenAndSave = async (req, res) => {
-  const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
-  const ws = new WebSocket(wsServerUrl);
-
   const indexName = `users_${req.coid.toLowerCase()}`;
   const categoryIndexName = `category_user_${req.coid.toLowerCase()}`;
   const categoriesIndexName = `categories_${req.coid.toLowerCase()}`;
@@ -1265,6 +1262,10 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
     // Call broadcastToAdmins to send the message to all connected admin clients
     // broadcastToAdmins(adminMessage);
+
+    const ws = new WebSocket(
+      "wss://enterprise-search-node-websocket.onrender.com"
+    );
 
     // Send the message to the WebSocket server
     ws.onopen = () => {
