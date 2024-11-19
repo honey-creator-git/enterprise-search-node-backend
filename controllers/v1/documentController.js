@@ -952,15 +952,11 @@ const createIndexIfNotExists = async (client, indexName, mapping) => {
     const { body: exists } = await client.indices.exists({ index: indexName });
 
     if (!exists) {
-      console.log(`Index ${indexName} does not exist. Creating...`);
-
       // Attempt to create the index
       await client.indices.create({
         index: indexName,
         body: mapping,
       });
-
-      console.log(`Index ${indexName} created successfully.`);
     } else {
       console.log(`Index ${indexName} already exists.`);
     }
@@ -1131,7 +1127,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     let azureResponse;
     try {
       await searchClientForTenant.getIndex(tenantIndexName);
-      console.log(`Azure index ${tenantIndexName} already exists.`);
     } catch (error) {
       if (error.statusCode === 404) {
         console.log(
@@ -1586,39 +1581,27 @@ exports.syncGoogleDrive = async (req, res) => {
   const drive = google.drive({ version: "v3", auth });
 
   async function fetchHtmlContent(fileId) {
-    // Fetch the HTML file from Google Drive
     const response = await drive.files.get(
       { fileId, alt: "media" },
       { responseType: "text" }
     );
-
-    // Load the HTML content into Cheerio
     const $ = cheerio.load(response.data);
-
-    // Extract meaningful content (e.g., text inside paragraphs)
     const extractedContent = $("body").text().trim();
-
     return extractedContent;
   }
 
   async function fetchExcelContent(fileId) {
-    // Fetch the file from Google Drive
     const response = await drive.files.get(
       { fileId, alt: "media" },
       { responseType: "arraybuffer" }
     );
-
-    // Parse the Excel file
     const workbook = xlsx.read(response.data, { type: "buffer" });
-
-    // Convert all sheets to JSON
     const sheets = workbook.SheetNames;
     const excelData = sheets.map((sheetName) => ({
       sheetName,
       data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
     }));
-
-    return JSON.stringify(excelData); // Return as JSON string for indexing
+    return JSON.stringify(excelData);
   }
 
   async function fetchFileContent(fileId) {
@@ -1626,12 +1609,12 @@ exports.syncGoogleDrive = async (req, res) => {
       { fileId, alt: "media" },
       { responseType: "text" }
     );
-    return response.data; // Raw text content of the file
+    return response.data;
   }
 
   async function fetchGoogleDocContent(fileId) {
     const response = await drive.files.export(
-      { fileId, mimeType: "text/plain" }, // Export as plain text
+      { fileId, mimeType: "text/plain" },
       { responseType: "text" }
     );
     return response.data;
@@ -1643,7 +1626,7 @@ exports.syncGoogleDrive = async (req, res) => {
       { responseType: "arraybuffer" }
     );
     const pdfData = await pdf(response.data);
-    return pdfData.text; // Extracted text
+    return pdfData.text;
   }
 
   async function fetchWordContent(fileId) {
@@ -1652,7 +1635,7 @@ exports.syncGoogleDrive = async (req, res) => {
       { responseType: "arraybuffer" }
     );
     const wordData = await mammoth.extractRawText({ buffer: response.data });
-    return wordData.value; // Extracted text
+    return wordData.value;
   }
 
   async function fetchFileContentByType(file) {
@@ -1675,35 +1658,73 @@ exports.syncGoogleDrive = async (req, res) => {
     } else if (file.mimeType === "application/vnd.google-apps.document") {
       return await fetchGoogleDocContent(file.id);
     } else {
-      return "Unsupported file type"; // Handle unsupported types
+      return "Unsupported file type";
     }
   }
 
   async function fetchAllFileContents(files, categoryId) {
     const fileData = [];
-
     for (const file of files) {
       try {
-        const content = await fetchFileContentByType(file); // Fetch content based on file type
-        fileData.push({
-          id: file.id,
-          title: file.name,
-          content: content,
-          description: "No description available",
-          category: `${categoryId}`, // Placeholder category
-        });
+        const content = await fetchFileContentByType(file);
+        if (content !== "Unsupported file type") {
+          fileData.push({
+            id: file.id,
+            title: file.name,
+            content: content,
+            description: "No description available",
+            category: `${categoryId}`,
+          });
+        } else {
+          console.log(`Skipping unsupported file type for file: ${file.name}`);
+        }
       } catch (error) {
         console.error(`Failed to fetch content for file ${file.name}:`, error);
       }
     }
-
     return fileData;
+  }
+
+  async function pushToAzureSearch(documents) {
+    const indexName = ("tenant_" + req.coid).toLowerCase();
+
+    try {
+      const payload = {
+        value: documents.map((doc) => ({
+          "@search.action": "mergeOrUpload",
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          description: doc.description,
+          category: doc.category,
+        })),
+      };
+
+      const esResponse = await axios.post(
+        `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2021-04-30-Preview`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": process.env.AZURE_SEARCH_API_KEY,
+          },
+        }
+      );
+
+      return esResponse.data;
+    } catch (error) {
+      console.error(
+        "Error pushing documents to Azure Cognitive Search:",
+        error.message
+      );
+      throw new Error(error.response ? error.response.data : error.message);
+    }
   }
 
   try {
     if (!name || !type) {
-      res.status(400).json({
-        message: `Data Source name and type must be set.`,
+      return res.status(400).json({
+        message: "Data Source name and type must be set.",
       });
     }
 
@@ -1723,26 +1744,29 @@ exports.syncGoogleDrive = async (req, res) => {
 
     const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    console.log("New Category Id => ", newCategoryId);
-
-    // Fetch files from Google Drive
     const filesResponse = await drive.files.list({
-      q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false", // Exclude folders
+      q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
       fields: "files(id, name, mimeType, modifiedTime)",
     });
 
     const files = filesResponse.data.files;
 
-    // Step 2: Fetch file contents
     const fileData = await fetchAllFileContents(files, newCategoryId);
 
-    res.status(200).json({
-      message: "Simulated Sync Successful",
-      files: fileData,
-    });
+    if (fileData.length > 0) {
+      const syncResponse = await pushToAzureSearch(fileData);
+      return res.status(200).json({
+        message: "Sync Successful",
+        data: syncResponse,
+      });
+    } else {
+      return res.status(200).json({
+        message: "No valid files to sync.",
+      });
+    }
   } catch (error) {
     console.error("Error syncing data:", error);
-    res.status(500).json({ error: "Failed to sync data" });
+    return res.status(500).json({ error: "Failed to sync data" });
   }
 };
 
