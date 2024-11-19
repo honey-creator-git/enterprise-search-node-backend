@@ -7,6 +7,7 @@ const categoryRoutes = require("./routes/v1/categoryRoutes");
 const categoryUserRoutes = require("./routes/v1/categoryUserRoutes");
 const userRoutes = require("./routes/v1/userRoutes");
 const monitorToolRoutes = require("./routes/v1/monitorToolRoutes");
+const dataSourceRoutes = require("./routes/v1/datasourcetypeRoutes");
 
 dotenv.config();
 
@@ -33,6 +34,9 @@ app.use("/api/v1/user", userRoutes);
 
 // use monitor tool routes
 app.use("/api/v1/monitor_tool", monitorToolRoutes);
+
+// use data source type routes
+app.use("/api/v1/data_source", dataSourceRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;

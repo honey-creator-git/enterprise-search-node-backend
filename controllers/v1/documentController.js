@@ -1544,6 +1544,31 @@ exports.getDocumentById = async (req, res) => {
   }
 };
 
+exports.getAllDataSourceTypes = async (req, res) => {
+  let coid = req.coid;
+  let indexName = "datasourcetypes" + "_" + coid.toLowerCase();
+
+  const searchQuery = {
+    index: indexName,
+    body: {
+      query: {
+        match_all: {},
+      },
+    },
+  };
+
+  // Get all data source types
+  const response = await client.search(searchQuery);
+
+  res.status(200).json({
+    message: "Retrieved data source types",
+    total: response.hits.total.value,
+    data: response.hits.hits.map((hit) => {
+      return hit._source;
+    }),
+  });
+};
+
 exports.monitorToolRoutes = (req, res) => {
   res.status(200).json({
     message: "Successful Monitor Tool Test",
