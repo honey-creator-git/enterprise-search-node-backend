@@ -36,7 +36,7 @@ app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/monitor_tool", monitorToolRoutes);
 
 // use data source type routes
-app.use("/api/v1/data_source", dataSourceRoutes);
+app.use("/api/v1/data_source_type", dataSourceRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
