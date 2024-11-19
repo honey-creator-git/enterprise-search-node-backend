@@ -253,11 +253,15 @@ exports.reindexIndices = async (req, res) => {
     const indexConfig = {
       mappings: {
         properties: {
-          title: { type: "text" },
-          description: { type: "text" },
-          content: { type: "text" },
-          image: { type: "keyword" },
-          category: { type: "keyword" },
+          // title: { type: "text" },
+          // description: { type: "text" },
+          // content: { type: "text" },
+          // image: { type: "keyword" },
+          // category: { type: "keyword" },
+
+          name: { type: "text" },
+          type: { type: "text" },
+          tenantId: { type: "keyword" },
         },
       },
     };
@@ -381,18 +385,24 @@ exports.updateCategoryUser = async (req, res) => {
 };
 
 exports.createNewCategory = async (req, res) => {
-  const categoriesIndexName = `categories_${req.coid.toLowerCase()}`;
+  const categoriesIndexName = `datasources_${req.coid.toLowerCase()}`;
   const categoryUserIndexName = `category_user_${req.coid.toLowerCase()}`;
   const usersIndexName = `users_${req.coid.toLowerCase()}`;
-  const { name } = req.body;
+  const { name, type } = req.body;
 
   try {
+    if (!name || !type) {
+      res.status(400).json({
+        message: `Data Source name and type must be set.`,
+      });
+    }
     if (!!name && name.length > 0) {
       // Step 1: Create the new category in the categories index
       const categoryResponse = await client.index({
         index: categoriesIndexName,
         body: {
           name: name,
+          type: type,
           tenantId: `tenant_${req.coid.toLowerCase()}`,
         },
       });
@@ -474,7 +484,7 @@ exports.createNewCategory = async (req, res) => {
 };
 
 exports.deleteCategory = async (req, res) => {
-  const categoryIndex = `categories_${req.coid.toLowerCase()}`;
+  const categoryIndex = `datasources_${req.coid.toLowerCase()}`;
   const categoryId = req.params.categoryId;
 
   try {
@@ -497,7 +507,7 @@ exports.deleteCategory = async (req, res) => {
 };
 
 exports.updateCategory = async (req, res) => {
-  const categoryIndex = `categories_${req.coid.toLowerCase()}`;
+  const categoryIndex = `datasources_${req.coid.toLowerCase()}`;
   const categoryId = req.params.categoryId;
 
   try {

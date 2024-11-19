@@ -909,7 +909,7 @@ exports.getAllCategoriesForTenant = async (req, res) => {
 
     // Step 3: Fetch categories from Elasticsearch and combine with counts
     const categoriesResponse = await client.search({
-      index: `categories_${req.coid.toLowerCase()}`,
+      index: `datasources_${req.coid.toLowerCase()}`,
       body: {
         query: {
           term: {
@@ -922,6 +922,7 @@ exports.getAllCategoriesForTenant = async (req, res) => {
     const categories = categoriesResponse.hits.hits.map((hit) => ({
       id: hit._id,
       name: hit._source.name,
+      type: hit._source.type,
       documentCount: categoryCounts[hit._id] || 0, // Use the counted values, defaulting to 0 if no documents
     }));
 
@@ -975,7 +976,7 @@ const createIndexIfNotExists = async (client, indexName, mapping) => {
 exports.decodeUserTokenAndSave = async (req, res) => {
   const indexName = `users_${req.coid.toLowerCase()}`;
   const categoryIndexName = `category_user_${req.coid.toLowerCase()}`;
-  const categoriesIndexName = `categories_${req.coid.toLowerCase()}`;
+  const categoriesIndexName = `datasources_${req.coid.toLowerCase()}`;
   const tenantIndexName = `tenant_${req.coid.toLowerCase()}`;
 
   const name = req.name;
@@ -1220,7 +1221,10 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     });
 
-    if (req.adminRole === true) {
+    if (
+      categorySearchResponse.hits.total.value === 0 &&
+      req.adminRole === true
+    ) {
       categoryResponse = await client.index({
         index: categoryIndexName,
         body: {
@@ -1302,7 +1306,7 @@ exports.getAllUsersFromTenant = async (req, res) => {
   try {
     // Search for categories with the specified tenantId
     const categoriesFromTenant = await client.search({
-      index: `categories_${req.coid.toLowerCase()}`, // Name of your index
+      index: `datasources_${req.coid.toLowerCase()}`, // Name of your index
       body: {
         query: {
           term: {
