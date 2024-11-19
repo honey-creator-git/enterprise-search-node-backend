@@ -1564,8 +1564,8 @@ exports.getAllDataSourceTypes = async (req, res) => {
     message: "Retrieved data source types",
     total: response.hits.total.value,
     data: response.hits.hits.map((hit) => {
-      return hit._source;
-    }),
+      return hit._source.name;
+    }).join(", "),
   });
 };
 
