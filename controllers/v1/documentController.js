@@ -7,6 +7,11 @@ const generateEmbedding = require("../../embedding").generateEmbedding;
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
 const WebSocket = require("ws");
+const { google } = require("googleapis");
+const pdf = require("pdf-parse");
+const mammoth = require("mammoth");
+const xlsx = require("xlsx");
+const cheerio = require("cheerio");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -1563,10 +1568,182 @@ exports.getAllDataSourceTypes = async (req, res) => {
   res.status(200).json({
     message: "Retrieved data source types",
     total: response.hits.total.value,
-    data: response.hits.hits.map((hit) => {
-      return hit._source.name;
-    }).join(", "),
+    data: response.hits.hits
+      .map((hit) => {
+        return hit._source.name;
+      })
+      .join(", "),
   });
+};
+
+exports.syncGoogleDrive = async (req, res) => {
+  const { gc_accessToken, name, type } = req.body;
+
+  // Initialize Google Drive API Client
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: gc_accessToken });
+
+  const drive = google.drive({ version: "v3", auth });
+
+  async function fetchHtmlContent(fileId) {
+    // Fetch the HTML file from Google Drive
+    const response = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "text" }
+    );
+
+    // Load the HTML content into Cheerio
+    const $ = cheerio.load(response.data);
+
+    // Extract meaningful content (e.g., text inside paragraphs)
+    const extractedContent = $("body").text().trim();
+
+    return extractedContent;
+  }
+
+  async function fetchExcelContent(fileId) {
+    // Fetch the file from Google Drive
+    const response = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "arraybuffer" }
+    );
+
+    // Parse the Excel file
+    const workbook = xlsx.read(response.data, { type: "buffer" });
+
+    // Convert all sheets to JSON
+    const sheets = workbook.SheetNames;
+    const excelData = sheets.map((sheetName) => ({
+      sheetName,
+      data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
+    }));
+
+    return JSON.stringify(excelData); // Return as JSON string for indexing
+  }
+
+  async function fetchFileContent(fileId) {
+    const response = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "text" }
+    );
+    return response.data; // Raw text content of the file
+  }
+
+  async function fetchGoogleDocContent(fileId) {
+    const response = await drive.files.export(
+      { fileId, mimeType: "text/plain" }, // Export as plain text
+      { responseType: "text" }
+    );
+    return response.data;
+  }
+
+  async function fetchPdfContent(fileId) {
+    const response = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "arraybuffer" }
+    );
+    const pdfData = await pdf(response.data);
+    return pdfData.text; // Extracted text
+  }
+
+  async function fetchWordContent(fileId) {
+    const response = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "arraybuffer" }
+    );
+    const wordData = await mammoth.extractRawText({ buffer: response.data });
+    return wordData.value; // Extracted text
+  }
+
+  async function fetchFileContentByType(file) {
+    if (file.mimeType === "text/plain") {
+      return await fetchFileContent(file.id);
+    } else if (file.mimeType === "application/pdf") {
+      return await fetchPdfContent(file.id);
+    } else if (
+      file.mimeType ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      return await fetchWordContent(file.id);
+    } else if (
+      file.mimeType ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ) {
+      return await fetchExcelContent(file.id);
+    } else if (file.mimeType === "text/html") {
+      return await fetchHtmlContent(file.id);
+    } else if (file.mimeType === "application/vnd.google-apps.document") {
+      return await fetchGoogleDocContent(file.id);
+    } else {
+      return "Unsupported file type"; // Handle unsupported types
+    }
+  }
+
+  async function fetchAllFileContents(files, categoryId) {
+    const fileData = [];
+
+    for (const file of files) {
+      try {
+        const content = await fetchFileContentByType(file); // Fetch content based on file type
+        fileData.push({
+          id: file.id,
+          title: file.name,
+          content: content,
+          description: "No description available",
+          category: `${categoryId}`, // Placeholder category
+        });
+      } catch (error) {
+        console.error(`Failed to fetch content for file ${file.name}:`, error);
+      }
+    }
+
+    return fileData;
+  }
+
+  try {
+    if (!name || !type) {
+      res.status(400).json({
+        message: `Data Source name and type must be set.`,
+      });
+    }
+
+    const esNewCategoryResponse = await axios.post(
+      "https://es-services.onrender.com/api/v1/category",
+      {
+        name: name,
+        type: type,
+      },
+      {
+        headers: {
+          Authorization: req.headers["authorization"],
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+    console.log("New Category Id => ", newCategoryId);
+
+    // Fetch files from Google Drive
+    const filesResponse = await drive.files.list({
+      q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false", // Exclude folders
+      fields: "files(id, name, mimeType, modifiedTime)",
+    });
+
+    const files = filesResponse.data.files;
+
+    // Step 2: Fetch file contents
+    const fileData = await fetchAllFileContents(files, newCategoryId);
+
+    res.status(200).json({
+      message: "Simulated Sync Successful",
+      files: fileData,
+    });
+  } catch (error) {
+    console.error("Error syncing data:", error);
+    res.status(500).json({ error: "Failed to sync data" });
+  }
 };
 
 exports.monitorToolRoutes = (req, res) => {
