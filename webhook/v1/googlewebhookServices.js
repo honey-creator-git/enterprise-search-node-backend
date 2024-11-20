@@ -4,6 +4,7 @@ const cheerio = require("cheerio");
 const xlsx = require("xlsx");
 const mammoth = require("mammoth");
 const pdf = require("pdf-parse");
+const axios = require("axios");
 
 // Save webhook details in Elasticsearch
 async function saveWebhookDetails(
@@ -11,7 +12,8 @@ async function saveWebhookDetails(
   categoryId,
   coid,
   gc_accessToken,
-  refreshToken
+  refreshToken,
+  startPageToken
 ) {
   try {
     const indexName = `resource_category_${coid.toLowerCase()}`;
@@ -22,10 +24,12 @@ async function saveWebhookDetails(
       gc_accessToken,
       refreshToken,
       tokenExpiry: Date.now() + 3600 * 1000, // Set token expiry time (1 hour from now)
+      startPageToken,
     };
 
     const response = await client.index({
       index: indexName,
+      id: resourceId, // Use resourceId as the document ID to avoid duplicates
       body: document,
     });
 
@@ -34,6 +38,27 @@ async function saveWebhookDetails(
   } catch (error) {
     console.error("Error saving webhook details to Elasticsearch:", error);
     throw new Error("Failed to save webhook details to Elasticsearch");
+  }
+}
+
+async function fetchGoogleDriveChanges(auth, startPageToken) {
+  const drive = google.drive({ version: "v3", auth });
+
+  try {
+    const response = await drive.changes.list({
+      pageToken: startPageToken,
+      fields:
+        "changes(fileId, file(name, mimeType, modifiedTime)), newStartPageToken",
+    });
+
+    const changes = response.data.changes || [];
+    const newPageToken = response.data.newStartPageToken;
+
+    console.log(`Fetched ${changes.length} changes from Google Drive.`);
+    return { changes, newPageToken };
+  } catch (error) {
+    console.error("Error fetching changes from Google Drive:", error.message);
+    throw new Error("Failed to fetch changes from Google Drive");
   }
 }
 
@@ -57,9 +82,23 @@ async function getWebhookDetailsByResourceId(resourceId) {
     const hits = response.hits.hits;
 
     if (hits.length > 0) {
-      const { categoryId, coid, gc_accessToken, refreshToken, tokenExpiry } =
-        hits[0]._source;
-      return { categoryId, coid, gc_accessToken, refreshToken, tokenExpiry };
+      const {
+        categoryId,
+        coid,
+        gc_accessToken,
+        refreshToken,
+        tokenExpiry,
+        startPageToken,
+      } = hits[0]._source;
+      console.log(`Webhook details found for resourceId: ${resourceId}`);
+      return {
+        categoryId,
+        coid,
+        gc_accessToken,
+        refreshToken,
+        tokenExpiry,
+        startPageToken,
+      };
     } else {
       console.log(`No details found for resourceId: ${resourceId}`);
       return null;
@@ -237,6 +276,7 @@ async function pushToAzureSearch(documents, coid) {
 
 module.exports = {
   saveWebhookDetails,
+  fetchGoogleDriveChanges,
   getWebhookDetailsByResourceId,
   refreshAccessToken,
   fetchFileData,

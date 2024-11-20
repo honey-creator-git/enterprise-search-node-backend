@@ -13,6 +13,7 @@ const xlsx = require("xlsx");
 const cheerio = require("cheerio");
 const {
   saveWebhookDetails,
+  fetchGoogleDriveChanges,
   getWebhookDetailsByResourceId,
   refreshAccessToken,
   fetchFileData,
@@ -1793,46 +1794,55 @@ exports.googleDriveWebhook = async (req, res) => {
       return res.status(400).send("Webhook details not found.");
     }
 
-    let { categoryId, coid, gc_accessToken, refreshToken, tokenExpiry } =
-      webhookDetails;
+    const { categoryId, coid, gc_accessToken, startPageToken } = webhookDetails;
 
-    // Refresh access token if expired
-    if (Date.now() >= tokenExpiry) {
-      console.log("Access token expired. Refreshing...");
-      const newTokenDetails = await refreshAccessToken(refreshToken);
-      gc_accessToken = newTokenDetails.gc_accessToken;
-      tokenExpiry = newTokenDetails.tokenExpiry;
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: gc_accessToken });
 
-      // Update stored details with the new access token
+    if (!changedFileId) {
+      console.log(
+        "No specific file ID provided. Fetching changes from Google Drive..."
+      );
+
+      const { changes, newPageToken } = await fetchGoogleDriveChanges(
+        auth,
+        startPageToken
+      );
+
+      for (const change of changes) {
+        if (change.fileId) {
+          console.log(`Processing fileId: ${change.fileId}`);
+          const fileData = await fetchFileData(
+            change.fileId,
+            categoryId,
+            gc_accessToken
+          );
+          if (fileData) {
+            await pushToAzureSearch([fileData], coid);
+          }
+        }
+      }
+
       await saveWebhookDetails(
         resourceId,
         categoryId,
         coid,
         gc_accessToken,
-        refreshToken
+        null,
+        newPageToken
       );
-    }
-
-    // Handle file changes
-    if (resourceState === "add" || resourceState === "change") {
-      console.log(
-        `Processing changes for coid: ${coid}, categoryId: ${categoryId}`
-      );
-
-      // Fetch and process the updated file
+    } else {
+      console.log(`Processing specific fileId: ${changedFileId}`);
       const fileData = await fetchFileData(
         changedFileId,
         categoryId,
         gc_accessToken
       );
-
       if (fileData) {
-        console.log(`Syncing updated file: ${fileData.title}`);
         await pushToAzureSearch([fileData], coid);
       }
     }
 
-    // Acknowledge the webhook
     res.status(200).send("Webhook notification handled.");
   } catch (error) {
     console.error("Error handling webhook notification:", error.message);
@@ -1844,13 +1854,28 @@ exports.registerWebhook = async (req, res) => {
   const { gc_accessToken, gc_refreshToken, webhookUrl, datasourceId } =
     req.body;
 
+  // Validate required inputs
+  if (!gc_accessToken || !gc_refreshToken || !webhookUrl || !datasourceId) {
+    return res.status(400).json({
+      error:
+        "Missing required fields: gc_accessToken, gc_refreshToken, webhookUrl, datasourceId",
+    });
+  }
+
   try {
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: gc_accessToken });
 
     const drive = google.drive({ version: "v3", auth });
 
-    const response = await drive.files.watch({
+    // Retrieve the startPageToken to track future changes
+    const startTokenResponse = await drive.changes.getStartPageToken();
+    const startPageToken = startTokenResponse.data.startPageToken;
+
+    console.log("Retrieved startPageToken:", startPageToken);
+
+    // Register the webhook with Google Drive
+    const watchResponse = await drive.files.watch({
       fileId: "root", // Watch the entire Drive
       requestBody: {
         id: `webhook-${Date.now()}`, // Unique channel ID
@@ -1859,20 +1884,23 @@ exports.registerWebhook = async (req, res) => {
       },
     });
 
-    console.log("Webhook registered successfully:", response.data);
+    console.log("Webhook registered successfully:", watchResponse.data);
 
-    // Save categoryId with webhook details (database or memory store)
+    // Save webhook details to Elasticsearch or your database
+    const resourceId = watchResponse.data.resourceId;
+
     await saveWebhookDetails(
-      response.data.resourceId,
-      datasourceId,
-      req.coid,
-      gc_accessToken,
-      gc_refreshToken
+      resourceId, // Webhook resourceId
+      datasourceId, // Data source category ID
+      req.coid, // Company or tenant ID
+      gc_accessToken, // Access token
+      gc_refreshToken, // Refresh token
+      startPageToken // Start page token
     );
 
     res.status(200).json({
       message: "Webhook registered successfully",
-      data: response.data,
+      data: watchResponse.data,
     });
   } catch (error) {
     console.error("Failed to register webhook:", error.message);
