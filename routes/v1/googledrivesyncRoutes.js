@@ -27,4 +27,11 @@ router.post(
   documentController.testWebhookTokenExpiration
 );
 
+router.post(
+  "/get-tokens",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getTokens
+);
+
 module.exports = router;

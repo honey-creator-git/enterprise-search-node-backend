@@ -1794,10 +1794,56 @@ exports.googleDriveWebhook = async (req, res) => {
       return res.status(400).send("Webhook details not found.");
     }
 
-    const { categoryId, coid, gc_accessToken, refreshToken, startPageToken } = webhookDetails;
+    const {
+      categoryId,
+      coid,
+      gc_accessToken,
+      refreshToken,
+      startPageToken,
+      client_id,
+      client_secret,
+    } = webhookDetails;
 
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: gc_accessToken });
+    let accessToken = gc_accessToken;
+
+    // Set up Google Auth client
+    const auth = new google.auth.OAuth2(client_id, client_secret);
+
+    try {
+      auth.setCredentials({ access_token: gc_accessToken });
+
+      // Test the token by making a lightweight API request
+      await auth.getAccessToken();
+    } catch (tokenError) {
+      console.error("Access token expired. Refreshing token...", tokenError.message);
+
+      try {
+        // Refresh the access token using the refresh token
+        const refreshedToken = await refreshAccessToken(client_id, client_secret, refreshToken);
+
+        // Update the access token
+        accessToken = refreshedToken.access_token;
+        expiry_date = refreshedToken.expiry_date;
+
+        // Save the new access token and expiry to Elasticsearch
+        await saveWebhookDetails(
+          resourceId,
+          categoryId,
+          coid,
+          accessToken,
+          refreshToken,
+          startPageToken,
+          expiry_date,
+          client_id,
+          client_secret
+        );
+
+        auth.setCredentials({ access_token: accessToken });
+      } catch (refreshError) {
+        console.error("Failed to refresh access token:", refreshError.message);
+        return res.status(401).send("Failed to refresh access token.");
+      }
+    }
 
     if (!changedFileId) {
       console.log(
@@ -1851,7 +1897,7 @@ exports.googleDriveWebhook = async (req, res) => {
 };
 
 exports.registerWebhook = async (req, res) => {
-  const { gc_accessToken, gc_refreshToken, webhookUrl, datasourceId } =
+  const { gc_accessToken, gc_refreshToken, webhookUrl, datasourceId, expiry_date, client_id, client_secret } =
     req.body;
 
   // Validate required inputs
@@ -1871,8 +1917,6 @@ exports.registerWebhook = async (req, res) => {
     // Retrieve the startPageToken to track future changes
     const startTokenResponse = await drive.changes.getStartPageToken();
     const startPageToken = startTokenResponse.data.startPageToken;
-
-    console.log("Retrieved startPageToken:", startPageToken);
 
     // Register the webhook with Google Drive
     const watchResponse = await drive.files.watch({
@@ -1895,7 +1939,10 @@ exports.registerWebhook = async (req, res) => {
       req.coid, // Company or tenant ID
       gc_accessToken, // Access token
       gc_refreshToken, // Refresh token
-      startPageToken // Start page token
+      startPageToken, // Start page token
+      expiry_date,
+      client_id,
+      client_secret
     );
 
     res.status(200).json({
@@ -1917,61 +1964,39 @@ exports.monitorToolRoutes = (req, res) => {
   });
 };
 
-exports.testWebhookTokenExpiration = async (req, res) => {
-  const { resourceId, client_id, client_secret } = req.body;
+exports.testWebhookTokenExpiration = (req, res) => {
+  const { client_id, redirect_uri } = req.body;
+
+  if (!client_id || !redirect_uri) {
+    return res.status(400).json({ error: "client_id and redirect_uri are required" });
+  }
+
+  const oauth2Client = new google.auth.OAuth2(client_id, null, redirect_uri);
+
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: "offline", // This ensures a refresh_token is returned
+    scope: ["https://www.googleapis.com/auth/drive"], // Scopes for accessing Google Drive
+  });
+
+  res.status(200).json({ authUrl });
+};
+
+exports.getTokens = async (req, res) => {
+  const { client_id, client_secret, redirect_uri, code } = req.body;
+
+  if (!client_id || !client_secret || !redirect_uri || !code) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
 
   try {
-    const webhookDetails = await getWebhookDetailsByResourceId(resourceId);
+    const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
 
-    if (!webhookDetails) {
-      console.error("No webhook details found for resource ID:", resourceId);
-      return res.status(400).send("Webhook details not found.");
-    }
+    const { tokens } = await oauth2Client.getToken(code);
 
-    let { gc_accessToken, refreshToken, tokenExpiry } = webhookDetails;
-
-    console.log("Refresh Token => ", webhookDetails);
-
-    // Check if the access token is expired
-    if (Date.now() >= tokenExpiry) {
-      console.log("Access token expired. Refreshing token...");
-
-      try {
-        const refreshedToken = await refreshAccessToken(
-          client_id,
-          client_secret,
-          refreshToken
-        );
-        gc_accessToken = refreshedToken.access_token;
-        tokenExpiry = refreshedToken.expiry_date;
-
-        // Save the new token and expiry to the database or index
-        await saveWebhookDetails(
-          resourceId,
-          webhookDetails.categoryId,
-          webhookDetails.coid,
-          gc_accessToken,
-          refreshToken,
-          webhookDetails.startPageToken,
-          client_id,
-          client_secret
-        );
-
-        console.log("Token refreshed successfully!");
-      } catch (refreshError) {
-        console.error("Failed to refresh access token:", refreshError.message);
-        return res.status(500).send("Token refresh failed.");
-      }
-    }
-
-    // Proceed with Google Drive API calls using the refreshed gc_accessToken
-    const auth = new google.auth.OAuth2(client_id, client_secret);
-    auth.setCredentials({ access_token: gc_accessToken });
-
-    // Fetch or process Google Drive changes
-    res.status(200).send("Webhook handled successfully.");
+    // Save tokens securely in your database or return them to the frontend
+    res.status(200).json(tokens);
   } catch (error) {
-    console.error("Error handling webhook notification:", error.message);
-    res.status(500).send("Failed to handle webhook notification.");
+    console.error("Error exchanging authorization code for tokens:", error.message);
+    res.status(500).json({ error: "Failed to exchange authorization code for tokens" });
   }
 };

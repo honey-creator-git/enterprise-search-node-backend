@@ -13,7 +13,10 @@ async function saveWebhookDetails(
   coid,
   gc_accessToken,
   refreshToken,
-  startPageToken
+  startPageToken,
+  expiry_date,
+  client_id,
+  client_secret
 ) {
   try {
     const indexName = `resource_category_${coid.toLowerCase()}`;
@@ -23,14 +26,19 @@ async function saveWebhookDetails(
       coid,
       gc_accessToken,
       refreshToken,
-      tokenExpiry: Date.now() + 3600 * 1000, // Set token expiry time (1 hour from now)
+      tokenExpiry: expiry_date, // Set token expiry time (1 hour from now)
       startPageToken,
+      client_id,
+      client_secret
     };
 
-    const response = await client.index({
+    const response = await client.update({
       index: indexName,
       id: resourceId, // Use resourceId as the document ID to avoid duplicates
-      body: document,
+      body: {
+        doc: document, // Update the document with the new values
+        doc_as_upsert: true, // Create the document if it does not exist
+      },
     });
 
     console.log(`Webhook details saved successfully in index: ${indexName}`);
@@ -89,6 +97,8 @@ async function getWebhookDetailsByResourceId(resourceId) {
         refreshToken,
         tokenExpiry,
         startPageToken,
+        client_id,
+        client_secret
       } = hits[0]._source;
       console.log(`Webhook details found for resourceId: ${resourceId}`);
       return {
@@ -98,6 +108,8 @@ async function getWebhookDetailsByResourceId(resourceId) {
         refreshToken,
         tokenExpiry,
         startPageToken,
+        client_id,
+        client_secret
       };
     } else {
       console.log(`No details found for resourceId: ${resourceId}`);
@@ -112,20 +124,13 @@ async function getWebhookDetailsByResourceId(resourceId) {
   }
 }
 
-// Refresh access token using refreshToken
 async function refreshAccessToken(client_id, client_secret, refreshToken) {
   try {
     const auth = new google.auth.OAuth2(client_id, client_secret);
 
-    console.log("Auth => ", auth);
-
-    console.log("Refresh Token => ", refreshToken);
-
     auth.setCredentials({ refresh_token: refreshToken });
 
     const { credentials } = await auth.refreshAccessToken();
-
-    console.log("New access token:", credentials.access_token);
 
     return {
       access_token: credentials.access_token,
