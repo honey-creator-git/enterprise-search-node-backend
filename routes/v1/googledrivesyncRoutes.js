@@ -13,8 +13,6 @@ router.post(
 
 router.post(
   "/webhook",
-  setRoleMiddleware,
-  checkAdminAccess,
   documentController.googleDriveWebhook
 );
 
