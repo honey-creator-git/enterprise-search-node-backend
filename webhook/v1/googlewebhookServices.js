@@ -113,21 +113,23 @@ async function getWebhookDetailsByResourceId(resourceId) {
 }
 
 // Refresh access token using refreshToken
-async function refreshAccessToken(refreshToken) {
+async function refreshAccessToken(client_id, client_secret, refreshToken) {
   try {
-    const auth = new google.auth.OAuth2(
-      process.env.CLIENT_ID,
-      process.env.CLIENT_SECRET,
-      process.env.REDIRECT_URI
-    );
+    const auth = new google.auth.OAuth2(client_id, client_secret);
 
-    const { tokens } = await auth.refreshToken(refreshToken);
+    console.log("Auth => ", auth);
 
-    console.log("Access token refreshed successfully:", tokens);
+    console.log("Refresh Token => ", refreshToken);
+
+    auth.setCredentials({ refresh_token: refreshToken });
+
+    const { credentials } = await auth.refreshAccessToken();
+
+    console.log("New access token:", credentials.access_token);
 
     return {
-      gc_accessToken: tokens.access_token,
-      tokenExpiry: Date.now() + tokens.expiry_date, // Update expiry time
+      access_token: credentials.access_token,
+      expiry_date: credentials.expiry_date, // Update expiry time
     };
   } catch (error) {
     console.error("Error refreshing access token:", error.message);

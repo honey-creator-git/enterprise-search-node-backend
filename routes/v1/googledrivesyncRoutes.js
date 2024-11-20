@@ -11,16 +11,20 @@ router.post(
   documentController.syncGoogleDrive
 );
 
-router.post(
-  "/webhook",
-  documentController.googleDriveWebhook
-);
+router.post("/webhook", documentController.googleDriveWebhook);
 
 router.post(
   "/register-webhook",
   setRoleMiddleware,
   checkAdminAccess,
   documentController.registerWebhook
+);
+
+router.post(
+  "/test-token-expiration",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.testWebhookTokenExpiration
 );
 
 module.exports = router;

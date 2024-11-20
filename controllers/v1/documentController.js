@@ -1794,7 +1794,7 @@ exports.googleDriveWebhook = async (req, res) => {
       return res.status(400).send("Webhook details not found.");
     }
 
-    const { categoryId, coid, gc_accessToken, startPageToken } = webhookDetails;
+    const { categoryId, coid, gc_accessToken, refreshToken, startPageToken } = webhookDetails;
 
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: gc_accessToken });
@@ -1828,7 +1828,7 @@ exports.googleDriveWebhook = async (req, res) => {
         categoryId,
         coid,
         gc_accessToken,
-        null,
+        refreshToken,
         newPageToken
       );
     } else {
@@ -1915,4 +1915,63 @@ exports.monitorToolRoutes = (req, res) => {
   res.status(200).json({
     message: "Successful Monitor Tool Test",
   });
+};
+
+exports.testWebhookTokenExpiration = async (req, res) => {
+  const { resourceId, client_id, client_secret } = req.body;
+
+  try {
+    const webhookDetails = await getWebhookDetailsByResourceId(resourceId);
+
+    if (!webhookDetails) {
+      console.error("No webhook details found for resource ID:", resourceId);
+      return res.status(400).send("Webhook details not found.");
+    }
+
+    let { gc_accessToken, refreshToken, tokenExpiry } = webhookDetails;
+
+    console.log("Refresh Token => ", webhookDetails);
+
+    // Check if the access token is expired
+    if (Date.now() >= tokenExpiry) {
+      console.log("Access token expired. Refreshing token...");
+
+      try {
+        const refreshedToken = await refreshAccessToken(
+          client_id,
+          client_secret,
+          refreshToken
+        );
+        gc_accessToken = refreshedToken.access_token;
+        tokenExpiry = refreshedToken.expiry_date;
+
+        // Save the new token and expiry to the database or index
+        await saveWebhookDetails(
+          resourceId,
+          webhookDetails.categoryId,
+          webhookDetails.coid,
+          gc_accessToken,
+          refreshToken,
+          webhookDetails.startPageToken,
+          client_id,
+          client_secret
+        );
+
+        console.log("Token refreshed successfully!");
+      } catch (refreshError) {
+        console.error("Failed to refresh access token:", refreshError.message);
+        return res.status(500).send("Token refresh failed.");
+      }
+    }
+
+    // Proceed with Google Drive API calls using the refreshed gc_accessToken
+    const auth = new google.auth.OAuth2(client_id, client_secret);
+    auth.setCredentials({ access_token: gc_accessToken });
+
+    // Fetch or process Google Drive changes
+    res.status(200).send("Webhook handled successfully.");
+  } catch (error) {
+    console.error("Error handling webhook notification:", error.message);
+    res.status(500).send("Failed to handle webhook notification.");
+  }
 };
