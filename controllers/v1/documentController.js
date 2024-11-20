@@ -1770,6 +1770,65 @@ exports.syncGoogleDrive = async (req, res) => {
   }
 };
 
+exports.googleDriveWebhook = async (req, res) => {
+  const resourceId = req.headers["x-goog-resource-id"]; // Resource ID of the watched Drive
+  const resourceState = req.headers["x-goog-resource-state"]; // 'change', 'add', 'remove', etc.
+  const changedFileId = req.headers["x-goog-changed-file-id"]; // ID of the changed file (if applicable)
+
+  console.log("Webhook notification received:", {
+    resourceId,
+    resourceState,
+    changedFileId,
+  });
+
+  try {
+    // Call syncGoogleDrive to sync files when changes occur
+    if (resourceState === "change" || resourceState === "add") {
+      console.log("Syncing Google Drive due to file changes...");
+      await syncGoogleDrive(req, res); // Ensure syncGoogleDrive is imported or available
+    }
+
+    // Acknowledge the webhook
+    res.status(200).send("Webhook notification handled.");
+  } catch (error) {
+    console.error("Error handling webhook notification:", error.message);
+    res.status(500).send("Failed to handle webhook notification.");
+  }
+};
+
+exports.registerWebhook = async (req, res) => {
+  const { gc_accessToken, webhookUrl } = req.body;
+
+  try {
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: gc_accessToken });
+
+    const drive = google.drive({ version: "v3", auth });
+
+    const response = await drive.files.watch({
+      fileId: "root", // Watch the entire Drive
+      requestBody: {
+        id: `webhook-${Date.now()}`, // Unique channel ID
+        type: "web_hook",
+        address: webhookUrl, // Your webhook URL
+      },
+    });
+
+    console.log("Webhook registered successfully:", response.data);
+
+    res.status(200).json({
+      message: "Webhook registered successfully",
+      data: response.data,
+    });
+  } catch (error) {
+    console.error("Failed to register webhook:", error.message);
+    res.status(500).json({
+      error: "Failed to register webhook",
+      details: error.message,
+    });
+  }
+};
+
 exports.monitorToolRoutes = (req, res) => {
   res.status(200).json({
     message: "Successful Monitor Tool Test",

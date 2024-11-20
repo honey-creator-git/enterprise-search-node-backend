@@ -11,4 +11,18 @@ router.post(
   documentController.syncGoogleDrive
 );
 
+router.post(
+  "/webhook",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.googleDriveWebhook
+);
+
+router.post(
+  "/register-webhook",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.registerWebhook
+);
+
 module.exports = router;
