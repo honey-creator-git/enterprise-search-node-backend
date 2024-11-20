@@ -3,7 +3,6 @@ const {
   SearchIndexClient,
   AzureKeyCredential,
 } = require("@azure/search-documents");
-const generateEmbedding = require("../../embedding").generateEmbedding;
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
 const WebSocket = require("ws");
@@ -12,6 +11,13 @@ const pdf = require("pdf-parse");
 const mammoth = require("mammoth");
 const xlsx = require("xlsx");
 const cheerio = require("cheerio");
+const {
+  saveWebhookDetails,
+  getWebhookDetailsByResourceId,
+  refreshAccessToken,
+  fetchFileData,
+  pushToAzureSearch,
+} = require("../../webhook/v1/googlewebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -979,7 +985,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   const categoryIndexName = `category_user_${req.coid.toLowerCase()}`;
   const categoriesIndexName = `datasources_${req.coid.toLowerCase()}`;
   const tenantIndexName = `tenant_${req.coid.toLowerCase()}`;
-  const resourceCategoryIndexName = `resource_category_${req.coid.toLowerCase()}`;
 
   const name = req.name;
   const email = req.email;
@@ -1024,15 +1029,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     };
 
-    const resourceCategoryIndexMapping = {
-      mappings: {
-        properties: {
-          resourceId: { type: "keyword" },
-          categoryId: { type: "keyword" },
-        },
-      },
-    };
-
     // Ensure each index exists in Elasticsearch
     await createIndexIfNotExists(client, indexName, usersIndexMapping);
     await createIndexIfNotExists(
@@ -1044,11 +1040,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       client,
       categoryIndexName,
       categoryUserIndexMapping
-    );
-    await createIndexIfNotExists(
-      client,
-      resourceCategoryIndexName,
-      resourceCategoryIndexMapping
     );
     // Define Azure AI Search index schema
     let azureFields = [
@@ -1577,10 +1568,9 @@ exports.getAllDataSourceTypes = async (req, res) => {
   res.status(200).json({
     message: "Retrieved data source types",
     total: response.hits.total.value,
-    data: response.hits.hits
-      .map((hit) => {
-        return hit._source.name;
-      }),
+    data: response.hits.hits.map((hit) => {
+      return hit._source.name;
+    }),
   });
 };
 
@@ -1784,9 +1774,9 @@ exports.syncGoogleDrive = async (req, res) => {
 };
 
 exports.googleDriveWebhook = async (req, res) => {
-  const resourceId = req.headers["x-goog-resource-id"]; // Resource ID of the watched Drive
-  const resourceState = req.headers["x-goog-resource-state"]; // 'change', 'add', 'remove', etc.
-  const changedFileId = req.headers["x-goog-changed-file-id"]; // ID of the changed file (if applicable)
+  const resourceId = req.headers["x-goog-resource-id"]; // Resource ID of the webhook
+  const resourceState = req.headers["x-goog-resource-state"]; // 'add', 'change', etc.
+  const changedFileId = req.headers["x-goog-changed-file-id"]; // ID of the changed file (optional)
 
   console.log("Webhook notification received:", {
     resourceId,
@@ -1795,10 +1785,51 @@ exports.googleDriveWebhook = async (req, res) => {
   });
 
   try {
-    // Call syncGoogleDrive to sync files when changes occur
-    if (resourceState === "change" || resourceState === "add") {
-      console.log("Syncing Google Drive due to file changes...");
-      await syncGoogleDrive(req, res); // Ensure syncGoogleDrive is imported or available
+    // Retrieve the associated categoryId using resourceId
+    const webhookDetails = await getWebhookDetailsByResourceId(resourceId);
+
+    if (!webhookDetails) {
+      console.error("No webhook details found for resource ID:", resourceId);
+      return res.status(400).send("Webhook details not found.");
+    }
+
+    let { categoryId, coid, gc_accessToken, refreshToken, tokenExpiry } =
+      webhookDetails;
+
+    // Refresh access token if expired
+    if (Date.now() >= tokenExpiry) {
+      console.log("Access token expired. Refreshing...");
+      const newTokenDetails = await refreshAccessToken(refreshToken);
+      gc_accessToken = newTokenDetails.gc_accessToken;
+      tokenExpiry = newTokenDetails.tokenExpiry;
+
+      // Update stored details with the new access token
+      await saveWebhookDetails(
+        resourceId,
+        categoryId,
+        coid,
+        gc_accessToken,
+        refreshToken
+      );
+    }
+
+    // Handle file changes
+    if (resourceState === "add" || resourceState === "change") {
+      console.log(
+        `Processing changes for coid: ${coid}, categoryId: ${categoryId}`
+      );
+
+      // Fetch and process the updated file
+      const fileData = await fetchFileData(
+        changedFileId,
+        categoryId,
+        gc_accessToken
+      );
+
+      if (fileData) {
+        console.log(`Syncing updated file: ${fileData.title}`);
+        await pushToAzureSearch([fileData], coid);
+      }
     }
 
     // Acknowledge the webhook
@@ -1809,36 +1840,9 @@ exports.googleDriveWebhook = async (req, res) => {
   }
 };
 
-async function saveWebhookDetails(resourceId, categoryId, coid) {
-  try {
-    // Define the index name dynamically based on `coid`
-    const indexName = `resource_category_${coid.toLowerCase()}`;
-
-    // Prepare the document to save
-    const document = {
-      resourceId: resourceId,
-      categoryId: categoryId,
-    };
-
-    // Store the document in Elasticsearch
-    const response = await client.index({
-      index: indexName,
-      body: document,
-    });
-
-    console.log(
-      `Webhook details saved successfully in index: ${indexName}`,
-      response
-    );
-    return response;
-  } catch (error) {
-    console.error("Error saving webhook details to Elasticsearch:", error);
-    throw new Error("Failed to save webhook details to Elasticsearch");
-  }
-}
-
 exports.registerWebhook = async (req, res) => {
-  const { gc_accessToken, webhookUrl, datasourceId } = req.body;
+  const { gc_accessToken, gc_refreshToken, webhookUrl, datasourceId } =
+    req.body;
 
   try {
     const auth = new google.auth.OAuth2();
@@ -1858,7 +1862,13 @@ exports.registerWebhook = async (req, res) => {
     console.log("Webhook registered successfully:", response.data);
 
     // Save categoryId with webhook details (database or memory store)
-    await saveWebhookDetails(response.data.resourceId, datasourceId, req.coid);
+    await saveWebhookDetails(
+      response.data.resourceId,
+      datasourceId,
+      req.coid,
+      gc_accessToken,
+      gc_refreshToken
+    );
 
     res.status(200).json({
       message: "Webhook registered successfully",
