@@ -979,6 +979,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   const categoryIndexName = `category_user_${req.coid.toLowerCase()}`;
   const categoriesIndexName = `datasources_${req.coid.toLowerCase()}`;
   const tenantIndexName = `tenant_${req.coid.toLowerCase()}`;
+  const resourceCategoryIndexName = `resource_category_${req.coid.toLowerCase()}`;
 
   const name = req.name;
   const email = req.email;
@@ -1023,6 +1024,15 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     };
 
+    const resourceCategoryIndexMapping = {
+      mappings: {
+        properties: {
+          resourceId: { type: "keyword" },
+          categoryId: { type: "keyword" },
+        },
+      },
+    };
+
     // Ensure each index exists in Elasticsearch
     await createIndexIfNotExists(client, indexName, usersIndexMapping);
     await createIndexIfNotExists(
@@ -1035,7 +1045,11 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       categoryIndexName,
       categoryUserIndexMapping
     );
-
+    await createIndexIfNotExists(
+      client,
+      resourceCategoryIndexName,
+      resourceCategoryIndexMapping
+    );
     // Define Azure AI Search index schema
     let azureFields = [
       { name: "id", type: "Edm.String", key: true, searchable: false },
@@ -1566,8 +1580,7 @@ exports.getAllDataSourceTypes = async (req, res) => {
     data: response.hits.hits
       .map((hit) => {
         return hit._source.name;
-      })
-      .join(", "),
+      }),
   });
 };
 
@@ -1796,8 +1809,36 @@ exports.googleDriveWebhook = async (req, res) => {
   }
 };
 
+async function saveWebhookDetails(resourceId, categoryId, coid) {
+  try {
+    // Define the index name dynamically based on `coid`
+    const indexName = `resource_category_${coid.toLowerCase()}`;
+
+    // Prepare the document to save
+    const document = {
+      resourceId: resourceId,
+      categoryId: categoryId,
+    };
+
+    // Store the document in Elasticsearch
+    const response = await client.index({
+      index: indexName,
+      body: document,
+    });
+
+    console.log(
+      `Webhook details saved successfully in index: ${indexName}`,
+      response
+    );
+    return response;
+  } catch (error) {
+    console.error("Error saving webhook details to Elasticsearch:", error);
+    throw new Error("Failed to save webhook details to Elasticsearch");
+  }
+}
+
 exports.registerWebhook = async (req, res) => {
-  const { gc_accessToken, webhookUrl } = req.body;
+  const { gc_accessToken, webhookUrl, datasourceId } = req.body;
 
   try {
     const auth = new google.auth.OAuth2();
@@ -1815,6 +1856,9 @@ exports.registerWebhook = async (req, res) => {
     });
 
     console.log("Webhook registered successfully:", response.data);
+
+    // Save categoryId with webhook details (database or memory store)
+    await saveWebhookDetails(response.data.resourceId, datasourceId, req.coid);
 
     res.status(200).json({
       message: "Webhook registered successfully",
