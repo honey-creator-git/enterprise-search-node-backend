@@ -281,6 +281,66 @@ async function pushToAzureSearch(documents, coid) {
   }
 }
 
+async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, datasourceId, expiry_date, client_id, client_secret, coid) {
+
+  // Validate required inputs
+  if (!gc_accessToken || !gc_refreshToken || !webhookUrl || !datasourceId) {
+    return res.status(400).json({
+      error:
+        "Missing required fields: gc_accessToken, gc_refreshToken, webhookUrl, datasourceId",
+    });
+  }
+
+  try {
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: gc_accessToken });
+
+    const drive = google.drive({ version: "v3", auth });
+
+    // Retrieve the startPageToken to track future changes
+    const startTokenResponse = await drive.changes.getStartPageToken();
+    const startPageToken = startTokenResponse.data.startPageToken;
+
+    // Register the webhook with Google Drive
+    const watchResponse = await drive.files.watch({
+      fileId: "root", // Watch the entire Drive
+      requestBody: {
+        id: `webhook-${Date.now()}`, // Unique channel ID
+        type: "web_hook",
+        address: webhookUrl, // Your webhook URL
+      },
+    });
+
+    console.log("Webhook registered successfully:", watchResponse.data);
+
+    // Save webhook details to Elasticsearch or your database
+    const resourceId = watchResponse.data.resourceId;
+
+    await saveWebhookDetails(
+      resourceId, // Webhook resourceId
+      datasourceId, // Data source category ID
+      coid, // Company or tenant ID
+      gc_accessToken, // Access token
+      gc_refreshToken, // Refresh token
+      startPageToken, // Start page token
+      expiry_date,
+      client_id,
+      client_secret
+    );
+
+    return {
+      message: "Webhook registered successfully",
+      data: watchResponse.data,
+    };
+  } catch (error) {
+    console.error("Failed to register webhook:", error.message);
+    return {
+      error: "Failed to register webhook",
+      details: error.message,
+    };
+  }
+};
+
 module.exports = {
   saveWebhookDetails,
   fetchGoogleDriveChanges,
@@ -288,4 +348,5 @@ module.exports = {
   refreshAccessToken,
   fetchFileData,
   pushToAzureSearch,
+  registerWebhook
 };

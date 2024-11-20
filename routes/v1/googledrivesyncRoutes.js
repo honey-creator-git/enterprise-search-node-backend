@@ -14,13 +14,6 @@ router.post(
 router.post("/webhook", documentController.googleDriveWebhook);
 
 router.post(
-  "/register-webhook",
-  setRoleMiddleware,
-  checkAdminAccess,
-  documentController.registerWebhook
-);
-
-router.post(
   "/test-token-expiration",
   setRoleMiddleware,
   checkAdminAccess,
