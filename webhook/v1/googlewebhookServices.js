@@ -44,12 +44,18 @@ async function getWebhookDetailsByResourceId(resourceId) {
       index: "_all", // Search across all resource_category_* indices
       body: {
         query: {
-          term: { resourceId }, // Match the exact resourceId
+          term: {
+            resourceId: {
+              value: resourceId,
+              case_insensitive: true,
+            },
+          }, // Match the exact resourceId
         },
       },
     });
 
-    const hits = response.body.hits.hits;
+    const hits = response.hits.hits;
+
     if (hits.length > 0) {
       const { categoryId, coid, gc_accessToken, refreshToken, tokenExpiry } =
         hits[0]._source;
