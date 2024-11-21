@@ -1823,6 +1823,12 @@ exports.googleDriveWebhook = async (req, res) => {
         const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
 
         for (const change of changes) {
+          // Check if the file is trashed
+          if (change.file && change.file.trashed) {
+            console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
+            continue; // Skip this iteration for trashed files
+          }
+
           if (change.fileId) {
             console.log(`Processing fileId: ${change.fileId}`);
             const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
@@ -1877,6 +1883,12 @@ exports.googleDriveWebhook = async (req, res) => {
           const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
 
           for (const change of changes) {
+            // Check if the file is trashed
+            if (change.file && change.file.trashed) {
+              console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
+              continue; // Skip this iteration for trashed files
+            }
+
             if (change.fileId) {
               console.log(`Processing fileId: ${change.fileId}`);
               const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
