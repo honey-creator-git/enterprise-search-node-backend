@@ -32,6 +32,8 @@ async function saveWebhookDetails(
       client_secret
     };
 
+    console.log("Category Id => ", categoryId);
+
     const response = await client.update({
       index: indexName,
       id: resourceId, // Use resourceId as the document ID to avoid duplicates
