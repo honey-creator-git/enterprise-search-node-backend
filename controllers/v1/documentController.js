@@ -1871,7 +1871,9 @@ exports.googleDriveWebhook = async (req, res) => {
         coid,
         accessToken,
         refreshToken,
-        newPageToken
+        newPageToken,
+        client_id,
+        client_secret
       );
     } else {
       console.log(`Processing specific fileId: ${changedFileId}`);
