@@ -1780,9 +1780,9 @@ exports.syncGoogleDrive = async (req, res) => {
 
 
 exports.googleDriveWebhook = async (req, res) => {
-  const resourceId = req.headers["x-goog-resource-id"]; // Resource ID of the webhook
-  const resourceState = req.headers["x-goog-resource-state"]; // 'add', 'change', etc.
-  const changedFileId = req.headers["x-goog-changed-file-id"]; // ID of the changed file (optional)
+  const resourceId = req.headers["x-goog-resource-id"];
+  const resourceState = req.headers["x-goog-resource-state"];
+  const changedFileId = req.headers["x-goog-changed-file-id"];
 
   console.log("Webhook notification received:", {
     resourceId,
@@ -1791,7 +1791,6 @@ exports.googleDriveWebhook = async (req, res) => {
   });
 
   try {
-    // Retrieve the associated categoryId using resourceId
     const webhookDetails = await getWebhookDetailsByResourceId(resourceId);
 
     if (!webhookDetails) {
@@ -1811,26 +1810,19 @@ exports.googleDriveWebhook = async (req, res) => {
 
     let accessToken = gc_accessToken;
 
-    // Set up Google Auth client
+    // Google Auth Client
     const auth = new google.auth.OAuth2(client_id, client_secret);
 
     try {
       auth.setCredentials({ access_token: gc_accessToken });
-
-      // Test the token by making a lightweight API request
-      await auth.getAccessToken();
+      await auth.getAccessToken(); // Validate token
     } catch (tokenError) {
-      console.error("Access token expired. Refreshing token...", tokenError.message);
-
+      console.error("Access token expired. Refreshing token...");
       try {
-        // Refresh the access token using the refresh token
         const refreshedToken = await refreshAccessToken(client_id, client_secret, refreshToken);
-
-        // Update the access token
         accessToken = refreshedToken.access_token;
-        expiry_date = refreshedToken.expiry_date;
 
-        // Save the new access token and expiry to Elasticsearch
+        // Update token details in the database
         await saveWebhookDetails(
           resourceId,
           categoryId,
@@ -1838,7 +1830,7 @@ exports.googleDriveWebhook = async (req, res) => {
           accessToken,
           refreshToken,
           startPageToken,
-          expiry_date,
+          refreshedToken.expiry_date,
           client_id,
           client_secret
         );
@@ -1851,55 +1843,43 @@ exports.googleDriveWebhook = async (req, res) => {
     }
 
     if (!changedFileId) {
-      console.log(
-        "No specific file ID provided. Fetching changes from Google Drive..."
-      );
-
-      const { changes, newPageToken } = await fetchGoogleDriveChanges(
-        auth,
-        startPageToken
-      );
+      console.log("No specific file ID provided. Fetching changes...");
+      const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
 
       for (const change of changes) {
         if (change.fileId) {
           console.log(`Processing fileId: ${change.fileId}`);
-          const fileData = await fetchFileData(
-            change.fileId,
-            categoryId,
-            gc_accessToken
-          );
+          const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
           if (fileData) {
             await pushToAzureSearch([fileData], coid);
           }
         }
       }
 
+      // Save new startPageToken
       await saveWebhookDetails(
         resourceId,
         categoryId,
         coid,
-        gc_accessToken,
+        accessToken,
         refreshToken,
         newPageToken
       );
     } else {
       console.log(`Processing specific fileId: ${changedFileId}`);
-      const fileData = await fetchFileData(
-        changedFileId,
-        categoryId,
-        gc_accessToken
-      );
+      const fileData = await fetchFileData(changedFileId, categoryId, accessToken);
       if (fileData) {
         await pushToAzureSearch([fileData], coid);
       }
     }
 
-    res.status(200).send("Webhook notification handled.");
+    res.status(200).send("Webhook notification handled successfully.");
   } catch (error) {
     console.error("Error handling webhook notification:", error.message);
     res.status(500).send("Failed to handle webhook notification.");
   }
 };
+
 
 exports.monitorToolRoutes = (req, res) => {
   res.status(200).json({
