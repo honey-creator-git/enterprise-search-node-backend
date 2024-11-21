@@ -202,6 +202,14 @@ async function fetchFileContentByType(file, drive) {
   }
 }
 
+async function fetchFileContent(fileId, drive) {
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "text" }
+  );
+  return response.data;
+}
+
 // Fetch specific file types
 async function fetchPdfContent(fileId, drive) {
   const response = await drive.files.get(
@@ -241,6 +249,14 @@ async function fetchHtmlContent(fileId, drive) {
   );
   const $ = cheerio.load(response.data);
   return $("body").text().trim();
+}
+
+async function fetchGoogleDocContent(fileId, drive) {
+  const response = await drive.files.export(
+    { fileId, mimeType: "text/plain" },
+    { responseType: "text" }
+  );
+  return response.data;
 }
 
 // Push data to Azure Cognitive Search

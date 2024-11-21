@@ -1817,45 +1817,6 @@ exports.googleDriveWebhook = async (req, res) => {
       auth.setCredentials({ access_token: gc_accessToken });
       console.log("GC Access Token => ", gc_accessToken);
       await auth.getAccessToken(); // Validate token
-
-      if (!changedFileId) {
-        console.log("No specific file ID provided. Fetching changes...");
-        const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
-
-        for (const change of changes) {
-          // Check if the file is trashed
-          if (change.file && change.file.trashed) {
-            console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
-            continue; // Skip this iteration for trashed files
-          }
-
-          if (change.fileId) {
-            console.log(`Processing fileId: ${change.fileId}`);
-            const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
-            if (fileData) {
-              await pushToAzureSearch([fileData], coid);
-            }
-          }
-        }
-
-        // Save new startPageToken
-        await saveWebhookDetails(
-          resourceId,
-          categoryId,
-          coid,
-          accessToken,
-          refreshToken,
-          newPageToken
-        );
-      } else {
-        console.log(`Processing specific fileId: ${changedFileId}`);
-        const fileData = await fetchFileData(changedFileId, categoryId, accessToken);
-        if (fileData) {
-          await pushToAzureSearch([fileData], coid);
-        }
-      }
-
-      res.status(200).send("Webhook notification handled successfully.");
     } catch (tokenError) {
       console.error("Access token expired. Refreshing token...");
       try {
@@ -1877,50 +1838,50 @@ exports.googleDriveWebhook = async (req, res) => {
         );
 
         auth.setCredentials({ access_token: accessToken });
-
-        if (!changedFileId) {
-          console.log("No specific file ID provided. Fetching changes...");
-          const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
-
-          for (const change of changes) {
-            // Check if the file is trashed
-            if (change.file && change.file.trashed) {
-              console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
-              continue; // Skip this iteration for trashed files
-            }
-
-            if (change.fileId) {
-              console.log(`Processing fileId: ${change.fileId}`);
-              const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
-              if (fileData) {
-                await pushToAzureSearch([fileData], coid);
-              }
-            }
-          }
-
-          // Save new startPageToken
-          await saveWebhookDetails(
-            resourceId,
-            categoryId,
-            coid,
-            accessToken,
-            refreshToken,
-            newPageToken
-          );
-        } else {
-          console.log(`Processing specific fileId: ${changedFileId}`);
-          const fileData = await fetchFileData(changedFileId, categoryId, accessToken);
-          if (fileData) {
-            await pushToAzureSearch([fileData], coid);
-          }
-        }
-
-        res.status(200).send("Webhook notification handled successfully.");
       } catch (refreshError) {
         console.error("Failed to refresh access token:", refreshError.message);
         return res.status(401).send("Failed to refresh access token.");
       }
     }
+
+    if (!changedFileId) {
+      console.log("No specific file ID provided. Fetching changes...");
+      const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
+
+      for (const change of changes) {
+        // Check if the file is trashed
+        if (change.file && change.file.trashed) {
+          console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
+          continue; // Skip this iteration for trashed files
+        }
+
+        if (change.fileId) {
+          console.log(`Processing fileId: ${change.fileId}`);
+          const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
+          if (fileData) {
+            await pushToAzureSearch([fileData], coid);
+          }
+        }
+      }
+
+      // Save new startPageToken
+      await saveWebhookDetails(
+        resourceId,
+        categoryId,
+        coid,
+        accessToken,
+        refreshToken,
+        newPageToken
+      );
+    } else {
+      console.log(`Processing specific fileId: ${changedFileId}`);
+      const fileData = await fetchFileData(changedFileId, categoryId, accessToken);
+      if (fileData) {
+        await pushToAzureSearch([fileData], coid);
+      }
+    }
+
+    res.status(200).send("Webhook notification handled successfully.");
   } catch (error) {
     console.error("Error handling webhook notification:", error.message);
     res.status(500).send("Failed to handle webhook notification.");
