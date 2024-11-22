@@ -1803,6 +1803,7 @@ exports.googleDriveWebhook = async (req, res) => {
       coid,
       gc_accessToken,
       refreshToken,
+      tokenExpiry,
       startPageToken,
       client_id,
       client_secret,
@@ -1846,6 +1847,7 @@ exports.googleDriveWebhook = async (req, res) => {
           accessToken,
           refreshToken,
           newPageToken,
+          parseInt(tokenExpiry, 10),
           client_id,
           client_secret
         );
@@ -1906,6 +1908,7 @@ exports.googleDriveWebhook = async (req, res) => {
             accessToken,
             refreshToken,
             newPageToken,
+            refreshedToken.expiry_date,
             client_id,
             client_secret
           );
