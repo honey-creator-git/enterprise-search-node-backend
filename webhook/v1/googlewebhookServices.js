@@ -29,11 +29,39 @@ async function saveWebhookDetails(
       tokenExpiry: expiry_date, // Set token expiry time (1 hour from now)
       startPageToken,
       client_id,
-      client_secret
+      client_secret,
     };
 
     console.log("Category Id => ", categoryId);
 
+    // Check if index exists
+    const indexExists = await client.indices.exists({ index: indexName });
+
+    // If index doesn't exist, create it with a proper mapping
+    if (!indexExists) {
+      console.log(`Index ${indexName} does not exist. Creating index with mapping.`);
+      await client.indices.create({
+        index: indexName,
+        body: {
+          mappings: {
+            properties: {
+              resourceId: { type: "keyword" },
+              categoryId: { type: "keyword" },
+              coid: { type: "keyword" },
+              gc_accessToken: { type: "text" },
+              refreshToken: { type: "text" },
+              tokenExpiry: { type: "date" },
+              startPageToken: { type: "keyword" },
+              client_id: { type: "text" },
+              client_secret: { type: "text" },
+            },
+          },
+        },
+      });
+      console.log(`Index ${indexName} created successfully.`);
+    }
+
+    // Update or insert the document
     const response = await client.update({
       index: indexName,
       id: resourceId, // Use resourceId as the document ID to avoid duplicates
