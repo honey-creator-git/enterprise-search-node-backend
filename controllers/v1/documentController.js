@@ -1585,27 +1585,27 @@ exports.syncGoogleDrive = async (req, res) => {
     });
   }
 
+  const esNewCategoryResponse = await axios.post(
+    "https://es-services.onrender.com/api/v1/category",
+    {
+      name: name,
+      type: type,
+    },
+    {
+      headers: {
+        Authorization: req.headers["authorization"],
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
   try {
     auth.setCredentials({ access_token: gc_accessToken });
     await auth.getAccessToken(); // Validate token
 
     const drive = google.drive({ version: "v3", auth });
-
-    const esNewCategoryResponse = await axios.post(
-      "https://es-services.onrender.com/api/v1/category",
-      {
-        name: name,
-        type: type,
-      },
-      {
-        headers: {
-          Authorization: req.headers["authorization"],
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
     const filesResponse = await drive.files.list({
       q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
@@ -1638,22 +1638,6 @@ exports.syncGoogleDrive = async (req, res) => {
 
       auth.setCredentials({ access_token: accessToken });
       const drive = google.drive({ version: "v3", auth });
-
-      const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
-        {
-          name: name,
-          type: type,
-        },
-        {
-          headers: {
-            Authorization: req.headers["authorization"],
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
       const filesResponse = await drive.files.list({
         q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
