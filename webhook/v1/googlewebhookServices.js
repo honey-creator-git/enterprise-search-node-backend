@@ -13,8 +13,9 @@ async function saveWebhookDetails(
   coid,
   gc_accessToken,
   refreshToken,
+  webhookExpiry,
+  webhookUrl,
   startPageToken,
-  expiry_date,
   client_id,
   client_secret
 ) {
@@ -26,13 +27,12 @@ async function saveWebhookDetails(
       coid,
       gc_accessToken,
       refreshToken,
-      tokenExpiry: expiry_date, // Set token expiry time (1 hour from now)
+      webhookExpiry,
+      webhookUrl,
       startPageToken,
       client_id,
       client_secret,
     };
-
-    console.log("Category Id => ", categoryId);
 
     // Check if index exists
     const indexExists = await client.indices.exists({ index: indexName });
@@ -50,7 +50,8 @@ async function saveWebhookDetails(
               coid: { type: "keyword" },
               gc_accessToken: { type: "text" },
               refreshToken: { type: "text" },
-              tokenExpiry: { type: "date" },
+              webhookExpiry: { type: "date" },
+              webhookUrl: {type: "text"},
               startPageToken: { type: "keyword" },
               client_id: { type: "text" },
               client_secret: { type: "text" },
@@ -69,6 +70,7 @@ async function saveWebhookDetails(
         doc: document, // Update the document with the new values
         doc_as_upsert: true, // Create the document if it does not exist
       },
+      retry_on_conflict: 3, // Retry in case of concurrent updates
     });
 
     console.log(`Webhook details saved successfully in index: ${indexName}`);
@@ -125,7 +127,8 @@ async function getWebhookDetailsByResourceId(resourceId) {
         coid,
         gc_accessToken,
         refreshToken,
-        tokenExpiry,
+        webhookExpiry,
+        webhookUrl,
         startPageToken,
         client_id,
         client_secret
@@ -136,7 +139,8 @@ async function getWebhookDetailsByResourceId(resourceId) {
         coid,
         gc_accessToken,
         refreshToken,
-        tokenExpiry,
+        webhookExpiry,
+        webhookUrl,
         startPageToken,
         client_id,
         client_secret
@@ -164,7 +168,6 @@ async function refreshAccessToken(client_id, client_secret, refreshToken) {
 
     return {
       access_token: credentials.access_token,
-      expiry_date: credentials.expiry_date, // Update expiry time
     };
   } catch (error) {
     console.error("Error refreshing access token:", error.message);
@@ -327,7 +330,7 @@ async function pushToAzureSearch(documents, coid) {
   }
 }
 
-async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, datasourceId, expiry_date, client_id, client_secret, coid) {
+async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, datasourceId, client_id, client_secret, coid) {
 
   // Validate required inputs
   if (!gc_accessToken || !gc_refreshToken || !webhookUrl || !datasourceId) {
@@ -361,18 +364,27 @@ async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, data
 
     // Save webhook details to Elasticsearch or your database
     const resourceId = watchResponse.data.resourceId;
+    const expiration = parseInt(watchResponse.data.expiration, 10);
 
-    await saveWebhookDetails(
-      resourceId, // Webhook resourceId
-      datasourceId, // Data source category ID
-      coid, // Company or tenant ID
-      gc_accessToken, // Access token
-      gc_refreshToken, // Refresh token
-      startPageToken, // Start page token
-      expiry_date,
-      client_id,
-      client_secret
-    );
+    console.log("Expiration => ", expiration);
+
+    try {
+      await saveWebhookDetails(
+        resourceId,
+        datasourceId,
+        coid,
+        gc_accessToken,
+        gc_refreshToken,
+        expiration,
+        webhookUrl,
+        startPageToken,
+        client_id,
+        client_secret
+      );
+    } catch (saveError) {
+      console.error("Failed to save webhook details:", saveError.message);
+      throw new Error("Failed to save webhook details after registering the webhook");
+    }
 
     return {
       message: "Webhook registered successfully",
@@ -387,6 +399,29 @@ async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, data
   }
 };
 
+async function fetchAllFileContents(files, categoryId, drive) {
+  const fileData = [];
+  for (const file of files) {
+    try {
+      const content = await fetchFileContentByType(file, drive);
+      if (content !== "Unsupported file type") {
+        fileData.push({
+          id: file.id,
+          title: file.name,
+          content: content,
+          description: "No description available",
+          category: `${categoryId}`,
+        });
+      } else {
+        console.log(`Skipping unsupported file type for file: ${file.name}`);
+      }
+    } catch (error) {
+      console.error(`Failed to fetch content for file ${file.name}:`, error);
+    }
+  }
+  return fileData;
+}
+
 module.exports = {
   saveWebhookDetails,
   fetchGoogleDriveChanges,
@@ -394,5 +429,6 @@ module.exports = {
   refreshAccessToken,
   fetchFileData,
   pushToAzureSearch,
-  registerWebhook
+  registerWebhook,
+  fetchAllFileContents,
 };

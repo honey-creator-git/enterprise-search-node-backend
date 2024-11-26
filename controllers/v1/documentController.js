@@ -7,10 +7,6 @@ const client = require("../../config/elasticsearch");
 const axios = require("axios");
 const WebSocket = require("ws");
 const { google } = require("googleapis");
-const pdf = require("pdf-parse");
-const mammoth = require("mammoth");
-const xlsx = require("xlsx");
-const cheerio = require("cheerio");
 const {
   saveWebhookDetails,
   fetchGoogleDriveChanges,
@@ -19,6 +15,7 @@ const {
   fetchFileData,
   pushToAzureSearch,
   registerWebhook,
+  fetchAllFileContents,
 } = require("../../webhook/v1/googlewebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
@@ -1577,161 +1574,22 @@ exports.getAllDataSourceTypes = async (req, res) => {
 };
 
 exports.syncGoogleDrive = async (req, res) => {
-  const { gc_accessToken, gc_refreshToken, webhookUrl, expiry_date, client_id, client_secret, name, type } = req.body;
+  const { gc_accessToken, gc_refreshToken, webhookUrl, client_id, client_secret, name, type } = req.body;
 
   // Initialize Google Drive API Client
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: gc_accessToken });
+  const auth = new google.auth.OAuth2(client_id, client_secret);
 
-  const drive = google.drive({ version: "v3", auth });
-
-  async function fetchHtmlContent(fileId) {
-    const response = await drive.files.get(
-      { fileId, alt: "media" },
-      { responseType: "text" }
-    );
-    const $ = cheerio.load(response.data);
-    const extractedContent = $("body").text().trim();
-    return extractedContent;
-  }
-
-  async function fetchExcelContent(fileId) {
-    const response = await drive.files.get(
-      { fileId, alt: "media" },
-      { responseType: "arraybuffer" }
-    );
-    const workbook = xlsx.read(response.data, { type: "buffer" });
-    const sheets = workbook.SheetNames;
-    const excelData = sheets.map((sheetName) => ({
-      sheetName,
-      data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
-    }));
-    return JSON.stringify(excelData);
-  }
-
-  async function fetchFileContent(fileId) {
-    const response = await drive.files.get(
-      { fileId, alt: "media" },
-      { responseType: "text" }
-    );
-    return response.data;
-  }
-
-  async function fetchGoogleDocContent(fileId) {
-    const response = await drive.files.export(
-      { fileId, mimeType: "text/plain" },
-      { responseType: "text" }
-    );
-    return response.data;
-  }
-
-  async function fetchPdfContent(fileId) {
-    const response = await drive.files.get(
-      { fileId, alt: "media" },
-      { responseType: "arraybuffer" }
-    );
-    const pdfData = await pdf(response.data);
-    return pdfData.text;
-  }
-
-  async function fetchWordContent(fileId) {
-    const response = await drive.files.get(
-      { fileId, alt: "media" },
-      { responseType: "arraybuffer" }
-    );
-    const wordData = await mammoth.extractRawText({ buffer: response.data });
-    return wordData.value;
-  }
-
-  async function fetchFileContentByType(file) {
-    if (file.mimeType === "text/plain") {
-      return await fetchFileContent(file.id);
-    } else if (file.mimeType === "application/pdf") {
-      return await fetchPdfContent(file.id);
-    } else if (
-      file.mimeType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ) {
-      return await fetchWordContent(file.id);
-    } else if (
-      file.mimeType ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    ) {
-      return await fetchExcelContent(file.id);
-    } else if (file.mimeType === "text/html") {
-      return await fetchHtmlContent(file.id);
-    } else if (file.mimeType === "application/vnd.google-apps.document") {
-      return await fetchGoogleDocContent(file.id);
-    } else {
-      return "Unsupported file type";
-    }
-  }
-
-  async function fetchAllFileContents(files, categoryId) {
-    const fileData = [];
-    for (const file of files) {
-      try {
-        const content = await fetchFileContentByType(file);
-        if (content !== "Unsupported file type") {
-          fileData.push({
-            id: file.id,
-            title: file.name,
-            content: content,
-            description: "No description available",
-            category: `${categoryId}`,
-          });
-        } else {
-          console.log(`Skipping unsupported file type for file: ${file.name}`);
-        }
-      } catch (error) {
-        console.error(`Failed to fetch content for file ${file.name}:`, error);
-      }
-    }
-    return fileData;
-  }
-
-  async function pushToAzureSearch(documents) {
-    const indexName = ("tenant_" + req.coid).toLowerCase();
-
-    try {
-      const payload = {
-        value: documents.map((doc) => ({
-          "@search.action": "mergeOrUpload",
-          id: doc.id,
-          title: doc.title,
-          content: doc.content,
-          description: doc.description,
-          category: doc.category,
-        })),
-      };
-
-      const esResponse = await axios.post(
-        `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2021-04-30-Preview`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "api-key": process.env.AZURE_SEARCH_API_KEY,
-          },
-        }
-      );
-
-      return esResponse.data;
-    } catch (error) {
-      console.error(
-        "Error pushing documents to Azure Cognitive Search:",
-        error.message
-      );
-      throw new Error(error.response ? error.response.data : error.message);
-    }
+  if (!name || !type) {
+    return res.status(400).json({
+      message: "Data Source name and type must be set.",
+    });
   }
 
   try {
-    if (!name || !type) {
-      return res.status(400).json({
-        message: "Data Source name and type must be set.",
-      });
-    }
+    auth.setCredentials({ access_token: gc_accessToken });
+    await auth.getAccessToken(); // Validate token
+
+    const drive = google.drive({ version: "v3", auth });
 
     const esNewCategoryResponse = await axios.post(
       "https://es-services.onrender.com/api/v1/category",
@@ -1756,12 +1614,12 @@ exports.syncGoogleDrive = async (req, res) => {
 
     const files = filesResponse.data.files;
 
-    const fileData = await fetchAllFileContents(files, newCategoryId);
+    const fileData = await fetchAllFileContents(files, newCategoryId, drive);
 
-    const registerWebhookRes = await registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, newCategoryId, expiry_date, client_id, client_secret, req.coid);
+    const registerWebhookRes = await registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
 
     if (fileData.length > 0) {
-      const syncResponse = await pushToAzureSearch(fileData);
+      const syncResponse = await pushToAzureSearch(fileData, req.coid);
       return res.status(200).json({
         message: "Sync Successful",
         data: syncResponse,
@@ -1772,9 +1630,58 @@ exports.syncGoogleDrive = async (req, res) => {
         message: "No valid files to sync.",
       });
     }
-  } catch (error) {
-    console.error("Error syncing data:", error);
-    return res.status(500).json({ error: "Failed to sync data" });
+  } catch (tokenError) {
+    console.error("Access token expired. Refreshing token...");
+    try {
+      const refreshedToken = await refreshAccessToken(client_id, client_secret, gc_refreshToken);
+      accessToken = refreshedToken.access_token;
+
+      auth.setCredentials({ access_token: accessToken });
+      const drive = google.drive({ version: "v3", auth });
+
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: name,
+          type: type,
+        },
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+      const filesResponse = await drive.files.list({
+        q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+        fields: "files(id, name, mimeType, modifiedTime)",
+      });
+
+      const files = filesResponse.data.files;
+
+      const fileData = await fetchAllFileContents(files, newCategoryId, drive);
+
+      const registerWebhookRes = await registerWebhook(accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
+
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        return res.status(200).json({
+          message: "Sync Successful",
+          data: syncResponse,
+          webhookRegister: registerWebhookRes
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync.",
+        });
+      }
+    } catch (error) {
+      console.error("Error for syncing files", error.message);
+      return res.status(401).send("Failed to sync files");
+    }
   }
 };
 
@@ -1802,7 +1709,8 @@ exports.googleDriveWebhook = async (req, res) => {
       coid,
       gc_accessToken,
       refreshToken,
-      tokenExpiry,
+      webhookExpiry,
+      webhookUrl,
       startPageToken,
       client_id,
       client_secret,
@@ -1846,8 +1754,9 @@ exports.googleDriveWebhook = async (req, res) => {
           coid,
           accessToken,
           refreshToken,
+          webhookExpiry,
+          webhookUrl,
           newPageToken,
-          parseInt(tokenExpiry, 10),
           client_id,
           client_secret
         );
@@ -1872,8 +1781,9 @@ exports.googleDriveWebhook = async (req, res) => {
           coid,
           accessToken,
           refreshToken,
+          webhookExpiry,
+          webhookUrl,
           startPageToken,
-          refreshedToken.expiry_date,
           client_id,
           client_secret
         );
@@ -1907,8 +1817,9 @@ exports.googleDriveWebhook = async (req, res) => {
             coid,
             accessToken,
             refreshToken,
+            webhookExpiry,
+            webhookUrl,
             newPageToken,
-            refreshedToken.expiry_date,
             client_id,
             client_secret
           );
