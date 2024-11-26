@@ -320,7 +320,7 @@ async function pushToAzureSearch(documents, coid) {
     console.log(
       `Documents pushed successfully to Azure Search in index: ${indexName}`
     );
-    return esResponse;
+    return esResponse.data;
   } catch (error) {
     console.error(
       "Error pushing documents to Azure Cognitive Search:",
