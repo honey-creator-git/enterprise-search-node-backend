@@ -1632,39 +1632,34 @@ exports.syncGoogleDrive = async (req, res) => {
     }
   } catch (tokenError) {
     console.error("Access token expired. Refreshing token...");
-    try {
-      const refreshedToken = await refreshAccessToken(client_id, client_secret, gc_refreshToken);
-      accessToken = refreshedToken.access_token;
+    const refreshedToken = await refreshAccessToken(client_id, client_secret, gc_refreshToken);
+    accessToken = refreshedToken.access_token;
 
-      auth.setCredentials({ access_token: accessToken });
-      const drive = google.drive({ version: "v3", auth });
+    auth.setCredentials({ access_token: accessToken });
+    const drive = google.drive({ version: "v3", auth });
 
-      const filesResponse = await drive.files.list({
-        q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
-        fields: "files(id, name, mimeType, modifiedTime)",
+    const filesResponse = await drive.files.list({
+      q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+      fields: "files(id, name, mimeType, modifiedTime)",
+    });
+
+    const files = filesResponse.data.files;
+
+    const fileData = await fetchAllFileContents(files, newCategoryId, drive);
+
+    const registerWebhookRes = await registerWebhook(accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
+
+    if (fileData.length > 0) {
+      const syncResponse = await pushToAzureSearch(fileData, req.coid);
+      return res.status(200).json({
+        message: "Sync Successful",
+        data: syncResponse,
+        webhookRegister: registerWebhookRes
       });
-
-      const files = filesResponse.data.files;
-
-      const fileData = await fetchAllFileContents(files, newCategoryId, drive);
-
-      const registerWebhookRes = await registerWebhook(accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
-
-      if (fileData.length > 0) {
-        const syncResponse = await pushToAzureSearch(fileData, req.coid);
-        return res.status(200).json({
-          message: "Sync Successful",
-          data: syncResponse,
-          webhookRegister: registerWebhookRes
-        });
-      } else {
-        return res.status(200).json({
-          message: "No valid files to sync.",
-        });
-      }
-    } catch (error) {
-      console.error("Error for syncing files", error.message);
-      return res.status(401).send("Failed to sync files");
+    } else {
+      return res.status(200).json({
+        message: "No valid files to sync.",
+      });
     }
   }
 };
