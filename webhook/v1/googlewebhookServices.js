@@ -220,11 +220,11 @@ async function fetchGoogleSheetContent(fileId, drive) {
 
     const workbook = xlsx.read(response.data, { type: "buffer" });
     const sheets = workbook.SheetNames;
-    const documents = sheets.map((sheetName) => ({
+    const content = sheets.map((sheetName) => ({
       sheetName, // Include the sheet name for reference
       data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]), // Parse the sheet into JSON
     }));
-    return documents;
+    return JSON.stringify(content);
   } catch (error) {
     console.error("Error fetching Google Sheet content:", error.message);
     return "Error fetching Google Sheet content";
@@ -292,10 +292,11 @@ async function fetchExcelContent(fileId, drive) {
   );
   const workbook = xlsx.read(response.data, { type: "buffer" });
   const sheets = workbook.SheetNames;
-  return sheets.map((sheetName) => ({
+  const content = sheets.map((sheetName) => ({
     sheetName,
-    data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
+    data: JSON.stringify(xlsx.utils.sheet_to_json(workbook.Sheets[sheetName])),
   }));
+  return JSON.stringify(content);
 }
 
 async function fetchHtmlContent(fileId, drive) {
