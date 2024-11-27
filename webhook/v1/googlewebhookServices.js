@@ -220,12 +220,10 @@ async function fetchGoogleSheetContent(fileId, drive) {
 
     const workbook = xlsx.read(response.data, { type: "buffer" });
     const sheets = workbook.SheetNames;
-    const excelData = sheets.map((sheetName) => ({
+    return sheets.map((sheetName) => ({
       sheetName,
       data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
     }));
-
-    return JSON.stringify(excelData);
   } catch (error) {
     console.error("Error fetching Google Sheet content:", error.message);
     return "Error fetching Google Sheet content";
