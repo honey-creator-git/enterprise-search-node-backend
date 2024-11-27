@@ -51,7 +51,7 @@ async function saveWebhookDetails(
               gc_accessToken: { type: "text" },
               refreshToken: { type: "text" },
               webhookExpiry: { type: "date" },
-              webhookUrl: {type: "text"},
+              webhookUrl: { type: "text" },
               startPageToken: { type: "keyword" },
               client_id: { type: "text" },
               client_secret: { type: "text" },
@@ -208,6 +208,30 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
   }
 }
 
+async function fetchGoogleSheetContent(fileId, drive) {
+  try {
+    const response = await drive.files.export(
+      {
+        fileId: fileId,
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      { responseType: "arraybuffer" }
+    );
+
+    const workbook = xlsx.read(response.data, { type: "buffer" });
+    const sheets = workbook.SheetNames;
+    const excelData = sheets.map((sheetName) => ({
+      sheetName,
+      data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
+    }));
+
+    return JSON.stringify(excelData);
+  } catch (error) {
+    console.error("Error fetching Google Sheet content:", error.message);
+    return "Error fetching Google Sheet content";
+  }
+}
+
 // Helper function to fetch file content by type
 async function fetchFileContentByType(file, drive) {
   if (file.mimeType === "text/plain") {
@@ -224,6 +248,8 @@ async function fetchFileContentByType(file, drive) {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   ) {
     return await fetchExcelContent(file.id, drive);
+  } else if (file.mimeType === "application/vnd.google-apps.spreadsheet") {
+    return await fetchGoogleSheetContent(file.id, drive); // Google Sheets
   } else if (file.mimeType === "text/html") {
     return await fetchHtmlContent(file.id, drive);
   } else if (file.mimeType === "application/vnd.google-apps.document") {
