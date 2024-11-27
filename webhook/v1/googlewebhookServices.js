@@ -220,10 +220,11 @@ async function fetchGoogleSheetContent(fileId, drive) {
 
     const workbook = xlsx.read(response.data, { type: "buffer" });
     const sheets = workbook.SheetNames;
-    return sheets.map((sheetName) => ({
-      sheetName,
-      data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]),
+    const documents = sheets.map((sheetName) => ({
+      sheetName, // Include the sheet name for reference
+      data: xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]), // Parse the sheet into JSON
     }));
+    return documents;
   } catch (error) {
     console.error("Error fetching Google Sheet content:", error.message);
     return "Error fetching Google Sheet content";
@@ -429,6 +430,8 @@ async function fetchAllFileContents(files, categoryId, drive) {
     try {
       const content = await fetchFileContentByType(file, drive);
       if (content !== "Unsupported file type") {
+        console.log("File Name => ", file.name);
+        console.log("File Content => ", content);
         fileData.push({
           id: file.id,
           title: file.name,

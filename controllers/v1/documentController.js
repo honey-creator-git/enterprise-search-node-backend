@@ -1620,6 +1620,7 @@ exports.syncGoogleDrive = async (req, res) => {
 
     if (fileData.length > 0) {
       const syncResponse = await pushToAzureSearch(fileData, req.coid);
+      console.log("File Data => ", fileData);
       return res.status(200).json({
         message: "Sync Successful",
         data: syncResponse,
@@ -1651,6 +1652,7 @@ exports.syncGoogleDrive = async (req, res) => {
 
     if (fileData.length > 0) {
       const syncResponse = await pushToAzureSearch(fileData, req.coid);
+      console.log("File Data : ", fileData);
       return res.status(200).json({
         message: "Sync Successful",
         data: syncResponse,
