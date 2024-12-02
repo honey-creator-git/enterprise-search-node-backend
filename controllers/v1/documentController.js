@@ -1578,7 +1578,9 @@ exports.getAllDataSourceTypes = async (req, res) => {
 };
 
 exports.syncGoogleDrive = async (req, res) => {
-  const { gc_accessToken, gc_refreshToken, webhookUrl, client_id, client_secret, name, type } = req.body;
+  const { gc_accessToken, gc_refreshToken, client_id, client_secret, name, type } = req.body;
+
+  const webhookUrl = "https://es-services.onrender.com/api/v1/sync-google-drive/webhook";
 
   // Initialize Google Drive API Client
   const auth = new google.auth.OAuth2(client_id, client_secret);
