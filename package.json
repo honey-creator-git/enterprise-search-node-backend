@@ -21,6 +21,8 @@
     "http": "^0.0.1-security",
     "jsonwebtoken": "^9.0.2",
     "mammoth": "^1.8.0",
+    "mongodb": "^6.11.0",
+    "mysql2": "^3.11.5",
     "nodemon": "^3.1.7",
     "pdf-parse": "^1.1.1",
     "ws": "^8.18.0",

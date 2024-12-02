@@ -10,6 +10,7 @@ const monitorToolRoutes = require("./routes/v1/monitorToolRoutes");
 const dataSourceRoutes = require("./routes/v1/datasourcetypeRoutes");
 const googleDriveSyncRoutes = require("./routes/v1/googledrivesyncRoutes");
 const oneDriveSyncRoutes = require("./routes/v1/onedrivesyncRoutes");
+const mysqlsyncRoutes = require("./routes/v1/mysqlsyncRoutes");
 
 dotenv.config();
 
@@ -45,6 +46,9 @@ app.use("/api/v1/sync-google-drive", googleDriveSyncRoutes);
 
 // use sync one drive routes
 app.use("/api/v1/sync-one-drive", oneDriveSyncRoutes);
+
+// use sync mysql database routes
+app.use("/api/v1/mysql", mysqlsyncRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;

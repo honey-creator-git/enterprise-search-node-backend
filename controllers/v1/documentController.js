@@ -17,6 +17,9 @@ const {
   registerWebhook,
   fetchAllFileContents,
 } = require("../../webhook/v1/googlewebhookServices");
+const {
+  fetchDataFromMySQL
+} = require("../../webhook/v1/mysqlwebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -1015,6 +1018,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
         properties: {
           name: { type: "text" },
           tenantId: { type: "keyword" },
+          type: { type: "text" }
         },
       },
     };
@@ -2020,4 +2024,59 @@ exports.syncOneDrive = async (req, res) => {
     });
   }
 
+}
+
+exports.syncMySQLDatabase = async (req, res) => {
+  const {
+    db_host,
+    db_user,
+    db_password,
+    db_database,
+    table_name,
+    name,
+    type
+  } = req.body;
+
+  if (!name || !type) {
+    return res.status(400).json({
+      message: "Data source name and type must be set."
+    });
+  }
+
+  const esNewCategoryResponse = await axios.post(
+    "https://es-services.onrender.com/api/v1/category",
+    {
+      name: name,
+      type: type
+    },
+    {
+      headers: {
+        Authorization: req.headers["authorization"],
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+  const fileData = await fetchDataFromMySQL({
+    host: db_host,
+    user: db_user,
+    password: db_password,
+    database: db_database,
+    table_name: table_name,
+    category: newCategoryId
+  });
+
+  if (fileData.length > 0) {
+    const syncResponse = await pushToAzureSearch(fileData, req.coid);
+    return res.status(200).json({
+      message: "Sync Successful",
+      data: syncResponse
+    })
+  } else {
+    return res.status(200).json({
+      message: "No valid files to sync."
+    })
+  }
 }
