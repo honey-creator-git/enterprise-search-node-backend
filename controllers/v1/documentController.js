@@ -18,7 +18,8 @@ const {
   fetchAllFileContents,
 } = require("../../webhook/v1/googlewebhookServices");
 const {
-  fetchDataFromMySQL
+  fetchDataFromMySQL,
+  registerMySQLConnection
 } = require("../../webhook/v1/mysqlwebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
@@ -2061,7 +2062,7 @@ exports.syncMySQLDatabase = async (req, res) => {
 
   const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-  const fileData = await fetchDataFromMySQL({
+  const result = await fetchDataFromMySQL({
     host: db_host,
     user: db_user,
     password: db_password,
@@ -2070,13 +2071,29 @@ exports.syncMySQLDatabase = async (req, res) => {
     category: newCategoryId
   });
 
+  const fileData = result.data;
+  const binlogFile = result.binlogFile;
+  const binlogPosition = result.binlogPosition;
+
+  const registerMySQLConnectionRes = await registerMySQLConnection({
+    host: db_host,
+    user: db_user,
+    password: db_password,
+    database: db_database,
+    table_name: table_name,
+    category: newCategoryId,
+    coid: req.coid,
+    binlogFile: binlogFile,
+    binlogPosition: binlogPosition,
+  });
+
   if (fileData.length > 0) {
     const syncResponse = await pushToAzureSearch(fileData, req.coid);
     return res.status(200).json({
       message: "Sync Successful",
-      data: syncResponse
-    })
-
+      data: syncResponse,
+      mysql: registerMySQLConnectionRes
+    });
   } else {
     return res.status(200).json({
       message: "No valid files to sync."
