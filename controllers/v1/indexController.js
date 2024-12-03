@@ -404,6 +404,7 @@ exports.createNewCategory = async (req, res) => {
           name: name,
           type: type,
           tenantId: `tenant_${req.coid.toLowerCase()}`,
+          createdAt: new Date().toISOString(), // Add the createdAt field
         },
       });
 

@@ -937,6 +937,7 @@ exports.getAllCategoriesForTenant = async (req, res) => {
       id: hit._id,
       name: hit._source.name,
       type: hit._source.type,
+      created_at: hit._source.createdAt,
       documentCount: categoryCounts[hit._id] || 0, // Use the counted values, defaulting to 0 if no documents
     }));
 
@@ -1019,7 +1020,8 @@ exports.decodeUserTokenAndSave = async (req, res) => {
         properties: {
           name: { type: "text" },
           tenantId: { type: "keyword" },
-          type: { type: "text" }
+          type: { type: "text" },
+          createdAt: { type: "date" }, // Add the createdAt field here
         },
       },
     };
@@ -1329,6 +1331,8 @@ exports.getAllUsersFromTenant = async (req, res) => {
     const allCategories = categoriesFromTenant.hits.hits.map((hit) => ({
       id: hit._id,
       name: hit._source.name,
+      type: hit._source.type,
+      created_at: hit._source.createdAt,
     }));
 
     // Construct the query to get all users
@@ -1379,12 +1383,16 @@ exports.getAllUsersFromTenant = async (req, res) => {
             return {
               id: category.id,
               name: category.name,
+              type: category.type,
+              created_at: category.created_at,
               isAllowed: true,
             };
           } else {
             return {
               id: category.id,
               name: category.name,
+              type: category.type,
+              created_at: category.created_at,
               isAllowed: false,
             };
           }
