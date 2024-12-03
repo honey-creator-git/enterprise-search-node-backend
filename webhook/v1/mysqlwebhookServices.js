@@ -16,7 +16,7 @@ async function fetchDataFromMySQL(config) {
     try {
         const [rows] = await connection.query(`SELECT * FROM ${config.table_name}`)
         return rows.map(row => ({
-            id: row.id,
+            id: row.id.toString(),
             title: row.title,
             content: row.content,
             description: row.description,
