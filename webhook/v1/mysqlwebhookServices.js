@@ -3,7 +3,7 @@ const client = require("./../../config/elasticsearch");
 const mysql = require("mysql2/promise");
 const fs = require('fs'); // To read the SSL certificate file
 
-async function saveMySQLConnection(host, user, password, database, table_name, category, coid, binlogFile, binlogPosition) {
+async function saveMySQLConnection(host, user, password, database, table_name, category, coid, lastProcessedId) {
     try {
         const indexName = `datasource_mysql_connection_${coid.toLowerCase()}`;
 
@@ -15,8 +15,7 @@ async function saveMySQLConnection(host, user, password, database, table_name, c
             table_name,
             category,
             coid,
-            binlogFile,
-            binlogPosition,
+            lastProcessedId: lastProcessedId || 0, // Default to 0 if not provided
             updatedAt: new Date().toISOString(),
         }
 
@@ -38,8 +37,7 @@ async function saveMySQLConnection(host, user, password, database, table_name, c
                             table_name: { type: "text" },
                             category: { type: "text" },
                             coid: { type: "keyword" },
-                            binlogFile: { type: "keyword" },
-                            binlogPosition: { type: "long" },
+                            lastProcessedId: { type: "long" },
                             updatedAt: { type: "date" },
                         }
                     }
@@ -78,36 +76,44 @@ async function fetchDataFromMySQL(config) {
     });
 
     try {
-        const [rows] = await connection.query(`SELECT * FROM ${config.table_name}`);
+        console.log(`Fetching data from table: ${config.table_name}...`);
+
+        // Fetch rows where `id` is greater than the last processed ID
+        const [rows] = await connection.query(
+            `SELECT * FROM ${config.table_name} WHERE id > ? ORDER BY id ASC`,
+            [config.lastProcessedId || 0] // Use lastProcessedId if available, otherwise start from 0
+        );
+
         if (rows.length === 0) {
-            console.log("No rows found in the table.");
+            console.log("No new rows found in the table.");
             return {
                 data: [],
-            }
+                lastProcessedId: config.lastProcessedId || 0, // Return the same lastProcessedId
+            };
         }
 
+        console.log(`Fetched ${rows.length} new rows from the table.`);
+
         // Map rows to the required format
-        const data = rows.map(row => ({
+        const data = rows.map((row) => ({
             id: row.id.toString(),
             title: row.title,
             content: row.content,
             description: row.description,
             image: row.image,
-            category: config.category
+            category: config.category,
         }));
 
-        // Fetch the current binary log position
-        const [binlogStatus] = await connection.query('SHOW MASTER STATUS');
-        const { File: binlogFile, Position: binlogPosition } = binlogStatus[0];
+        // Find the last processed ID from the fetched rows
+        const lastProcessedId = rows[rows.length - 1].id;
 
-        console.log(`Current Binlog File: ${binlogFile}, Position: ${binlogPosition}`);
+        console.log(`Last Processed ID: ${lastProcessedId}`);
 
         // Return the data and the last processed ID
         return {
             data,
-            binlogFile,
-            binlogPosition,
-        }
+            lastProcessedId,
+        };
     } finally {
         await connection.end();
     }
@@ -116,7 +122,7 @@ async function fetchDataFromMySQL(config) {
 
 async function registerMySQLConnection(config) {
     try {
-        return await saveMySQLConnection(config.host, config.user, config.password, config.database, config.table_name, config.category, config.coid, config.binlogFile, config.binlogPosition);
+        return await saveMySQLConnection(config.host, config.user, config.password, config.database, config.table_name, config.category, config.coid, config.lastProcessedId);
     } catch (saveError) {
         console.error("Failed to save mysql connection: ", saveError.message);
         throw new Error("Failed to save mysql connection");

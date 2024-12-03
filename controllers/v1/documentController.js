@@ -2072,8 +2072,7 @@ exports.syncMySQLDatabase = async (req, res) => {
   });
 
   const fileData = result.data;
-  const binlogFile = result.binlogFile;
-  const binlogPosition = result.binlogPosition;
+  const lastProcessedId = result.lastProcessedId;
 
   const registerMySQLConnectionRes = await registerMySQLConnection({
     host: db_host,
@@ -2083,15 +2082,14 @@ exports.syncMySQLDatabase = async (req, res) => {
     table_name: table_name,
     category: newCategoryId,
     coid: req.coid,
-    binlogFile: binlogFile,
-    binlogPosition: binlogPosition,
+    lastProcessedId: lastProcessedId,
   });
 
   if (fileData.length > 0) {
-    const syncResponse = await pushToAzureSearch(fileData, req.coid);
+    // const syncResponse = await pushToAzureSearch(fileData, req.coid);
     return res.status(200).json({
       message: "Sync Successful",
-      data: syncResponse,
+      // data: syncResponse,
       mysql: registerMySQLConnectionRes
     });
   } else {
