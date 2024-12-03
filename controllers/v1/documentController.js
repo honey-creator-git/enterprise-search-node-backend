@@ -2086,10 +2086,10 @@ exports.syncMySQLDatabase = async (req, res) => {
   });
 
   if (fileData.length > 0) {
-    // const syncResponse = await pushToAzureSearch(fileData, req.coid);
+    const syncResponse = await pushToAzureSearch(fileData, req.coid);
     return res.status(200).json({
       message: "Sync Successful",
-      // data: syncResponse,
+      data: syncResponse,
       mysql: registerMySQLConnectionRes
     });
   } else {
