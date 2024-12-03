@@ -328,6 +328,7 @@ async function pushToAzureSearch(documents, coid) {
         title: doc.title,
         content: doc.content,
         description: doc.description,
+        image: doc.image,
         category: doc.category,
       })),
     };
