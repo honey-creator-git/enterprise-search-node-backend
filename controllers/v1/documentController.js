@@ -2076,6 +2076,7 @@ exports.syncMySQLDatabase = async (req, res) => {
       message: "Sync Successful",
       data: syncResponse
     })
+
   } else {
     return res.status(200).json({
       message: "No valid files to sync."
