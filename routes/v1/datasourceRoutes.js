@@ -4,11 +4,11 @@ const setRoleMiddleware = require("../../middleware/setRoleMiddleware");
 const checkAdminAccess = require("../../middleware/checkAdminAccess");
 const router = express.Router();
 
-router.get(
-  "/",
+router.post(
+  "/sync-datasources",
   setRoleMiddleware,
   checkAdminAccess,
-  documentController.getAllDataSourceTypes
+  documentController.syncDataFromDatasources
 );
 
 module.exports = router;

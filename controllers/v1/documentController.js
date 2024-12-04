@@ -2179,3 +2179,79 @@ exports.syncMongoData = async (req, res) => {
     })
   }
 }
+exports.syncDataFromDatasources = async (req, res) => {
+  if (!req.body.type) {
+    return res.status(400).json({
+      message: "Data source type must be set."
+    });
+  }
+
+  const dataSource_type = req.body.type;
+  let dataSourceSyncResponse;
+
+  try {
+    switch (dataSource_type) {
+      case "Google Drive":
+        dataSourceSyncResponse = await axios.post(
+          "https://es-services.onrender.com/api/v1/sync-google-drive",
+          {
+            ...req.body
+          },
+          {
+            headers: {
+              Authorization: req.headers["authorization"],
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        break;
+
+      case "SQL Database":
+        dataSourceSyncResponse = await axios.post(
+          "https://es-services.onrender.com/api/v1/mysql",
+          {
+            ...req.body
+          },
+          {
+            headers: {
+              Authorization: req.headers["authorization"],
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        break;
+
+      case "NoSQL Database":
+        dataSourceSyncResponse = await axios.post(
+          "https://es-services.onrender.com/api/v1/mongodb",
+          {
+            ...req.body
+          },
+          {
+            headers: {
+              Authorization: req.headers["authorization"],
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        break;
+
+      default:
+        return res.status(400).json({
+          message: "Unsupported data source type."
+        });
+    }
+
+    return res.status(200).json({
+      message: "Sync Successful",
+      data: dataSourceSyncResponse.data
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Sync failed",
+      error: error.message || error
+    });
+  }
+};
