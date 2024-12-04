@@ -1980,46 +1980,48 @@ exports.syncOneDrive = async (req, res) => {
     const accessToken = await getAccessToken();
     const files = await getFilesFromOneDrive(accessToken);
 
-    const esNewCategoryResponse = await axios.post(
-      "https://es-services.onrender.com/api/v1/category",
-      {
-        name: datasourceName,
-        type: datasourceType,
-      },
-      {
-        headers: {
-          Authorization: req.headers["authorization"],
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    console.log("Files => ", files);
 
-    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+    // const esNewCategoryResponse = await axios.post(
+    //   "https://es-services.onrender.com/api/v1/category",
+    //   {
+    //     name: datasourceName,
+    //     type: datasourceType,
+    //   },
+    //   {
+    //     headers: {
+    //       Authorization: req.headers["authorization"],
+    //       "Content-Type": "application/json",
+    //     },
+    //   }
+    // );
 
-    const documents = [];
-    for (const file of files) {
-      if (file.file) {
-        try {
-          const content = await fetchFileContentFromOneDrive(file, accessToken);
-          if (content) {
-            documents.push({
-              id: file.id,
-              title: file.name,
-              content,
-              category: newCategoryId,
-              description: `File from OneDrive: ${file.name}`
-            })
-          }
-        } catch (error) {
-          console.error(`Error processing file: ${file.name}`, error.message);
-        }
-      } else {
-        console.error.log(`Skipping unsupported or folder: ${file.name}`);
-      }
-    }
+    // const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    if (documents.length > 0) {
-      console.log("Documents from OneDrive => ", documents);
+    // const documents = [];
+    // for (const file of files) {
+    //   if (file.file) {
+    //     try {
+    //       const content = await fetchFileContentFromOneDrive(file, accessToken);
+    //       if (content) {
+    //         documents.push({
+    //           id: file.id,
+    //           title: file.name,
+    //           content,
+    //           category: newCategoryId,
+    //           description: `File from OneDrive: ${file.name}`
+    //         })
+    //       }
+    //     } catch (error) {
+    //       console.error(`Error processing file: ${file.name}`, error.message);
+    //     }
+    //   } else {
+    //     console.error.log(`Skipping unsupported or folder: ${file.name}`);
+    //   }
+    // }
+
+    // if (documents.length > 0) {
+    //   console.log("Documents from OneDrive => ", documents);
 
       // const azureResponse = await pushToAzureSearchFromOneDrive(documents);
       // return res.status(200).json({
@@ -2027,11 +2029,11 @@ exports.syncOneDrive = async (req, res) => {
       //   uploaded: documents.length,
       //   azureResponse
       // });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync."
-      });
-    }
+    // } else {
+    //   return res.status(200).json({
+    //     message: "No valid files to sync."
+    //   });
+    // }
   } catch (error) {
     console.error("Error syncing OneDrive data: ", error.message);
     return res.status(500).json({
