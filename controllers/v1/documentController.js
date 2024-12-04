@@ -16,6 +16,7 @@ const {
   pushToAzureSearch,
   registerWebhook,
   fetchAllFileContents,
+  checkExistOfGoogleDriveConfig,
 } = require("../../webhook/v1/googlewebhookServices");
 const {
   fetchDataFromMySQL,
@@ -1604,84 +1605,94 @@ exports.syncGoogleDrive = async (req, res) => {
     });
   }
 
-  const esNewCategoryResponse = await axios.post(
-    "https://es-services.onrender.com/api/v1/category",
-    {
-      name: name,
-      type: type,
-    },
-    {
-      headers: {
-        Authorization: req.headers["authorization"],
-        "Content-Type": "application/json",
+  const checkExistOfGoogleDriveConfigResponse = await checkExistOfGoogleDriveConfig(client_id, req.coid);
+
+  console.log("Check Exist of Google Drive Response => ", checkExistOfGoogleDriveConfigResponse);
+
+  if (checkExistOfGoogleDriveConfigResponse === "configuration is not existed") {
+    const esNewCategoryResponse = await axios.post(
+      "https://es-services.onrender.com/api/v1/category",
+      {
+        name: name,
+        type: type,
       },
+      {
+        headers: {
+          Authorization: req.headers["authorization"],
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+    try {
+      auth.setCredentials({ access_token: gc_accessToken });
+      await auth.getAccessToken(); // Validate token
+
+      const drive = google.drive({ version: "v3", auth });
+
+      const filesResponse = await drive.files.list({
+        q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+        fields: "files(id, name, mimeType, modifiedTime)",
+      });
+
+      const files = filesResponse.data.files;
+
+      const fileData = await fetchAllFileContents(files, newCategoryId, drive);
+
+      const registerWebhookRes = await registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
+
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        console.log("File Data => ", fileData);
+        return res.status(200).json({
+          message: "Sync Successful",
+          data: syncResponse,
+          webhookRegister: registerWebhookRes
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync.",
+        });
+      }
+    } catch (tokenError) {
+      console.error("Access token expired. Refreshing token...");
+      const refreshedToken = await refreshAccessToken(client_id, client_secret, gc_refreshToken);
+      accessToken = refreshedToken.access_token;
+
+      auth.setCredentials({ access_token: accessToken });
+      const drive = google.drive({ version: "v3", auth });
+
+      const filesResponse = await drive.files.list({
+        q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
+        fields: "files(id, name, mimeType, modifiedTime)",
+      });
+
+      const files = filesResponse.data.files;
+
+      const fileData = await fetchAllFileContents(files, newCategoryId, drive);
+
+      const registerWebhookRes = await registerWebhook(accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
+
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        console.log("File Data : ", fileData);
+        return res.status(200).json({
+          message: "Sync Successful",
+          data: syncResponse,
+          webhookRegister: registerWebhookRes
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync.",
+        });
+      }
     }
-  );
-
-  const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
-
-  try {
-    auth.setCredentials({ access_token: gc_accessToken });
-    await auth.getAccessToken(); // Validate token
-
-    const drive = google.drive({ version: "v3", auth });
-
-    const filesResponse = await drive.files.list({
-      q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
-      fields: "files(id, name, mimeType, modifiedTime)",
+  } else if (checkExistOfGoogleDriveConfigResponse === "configuration is already existed") {
+    return res.status(200).json({
+      data: "This google drive is already configured."
     });
-
-    const files = filesResponse.data.files;
-
-    const fileData = await fetchAllFileContents(files, newCategoryId, drive);
-
-    const registerWebhookRes = await registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
-
-    if (fileData.length > 0) {
-      const syncResponse = await pushToAzureSearch(fileData, req.coid);
-      console.log("File Data => ", fileData);
-      return res.status(200).json({
-        message: "Sync Successful",
-        data: syncResponse,
-        webhookRegister: registerWebhookRes
-      });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync.",
-      });
-    }
-  } catch (tokenError) {
-    console.error("Access token expired. Refreshing token...");
-    const refreshedToken = await refreshAccessToken(client_id, client_secret, gc_refreshToken);
-    accessToken = refreshedToken.access_token;
-
-    auth.setCredentials({ access_token: accessToken });
-    const drive = google.drive({ version: "v3", auth });
-
-    const filesResponse = await drive.files.list({
-      q: "mimeType != 'application/vnd.google-apps.folder' and trashed = false",
-      fields: "files(id, name, mimeType, modifiedTime)",
-    });
-
-    const files = filesResponse.data.files;
-
-    const fileData = await fetchAllFileContents(files, newCategoryId, drive);
-
-    const registerWebhookRes = await registerWebhook(accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
-
-    if (fileData.length > 0) {
-      const syncResponse = await pushToAzureSearch(fileData, req.coid);
-      console.log("File Data : ", fileData);
-      return res.status(200).json({
-        message: "Sync Successful",
-        data: syncResponse,
-        webhookRegister: registerWebhookRes
-      });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync.",
-      });
-    }
   }
 };
 
@@ -1893,6 +1904,7 @@ exports.syncOneDrive = async (req, res) => {
     client_secret,
     datasourceName,
     datasourceType,
+    userName,
   } = req.body;
 
   if (
@@ -1935,7 +1947,7 @@ exports.syncOneDrive = async (req, res) => {
     console.log("Generated Access Token => ", accessToken);
 
     try {
-      const response = await axios.get(`${graphBaseUrl}/me/drive/root/children`, {
+      const response = await axios.get(`${graphBaseUrl}/users/${userName}/drive/root/children`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       return response.data.value; // List of files and folders
@@ -1980,8 +1992,6 @@ exports.syncOneDrive = async (req, res) => {
     const accessToken = await getAccessToken();
     const files = await getFilesFromOneDrive(accessToken);
 
-    console.log("Files => ", files);
-
     // const esNewCategoryResponse = await axios.post(
     //   "https://es-services.onrender.com/api/v1/category",
     //   {
@@ -1998,42 +2008,42 @@ exports.syncOneDrive = async (req, res) => {
 
     // const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    // const documents = [];
-    // for (const file of files) {
-    //   if (file.file) {
-    //     try {
-    //       const content = await fetchFileContentFromOneDrive(file, accessToken);
-    //       if (content) {
-    //         documents.push({
-    //           id: file.id,
-    //           title: file.name,
-    //           content,
-    //           category: newCategoryId,
-    //           description: `File from OneDrive: ${file.name}`
-    //         })
-    //       }
-    //     } catch (error) {
-    //       console.error(`Error processing file: ${file.name}`, error.message);
-    //     }
-    //   } else {
-    //     console.error.log(`Skipping unsupported or folder: ${file.name}`);
-    //   }
-    // }
+    const documents = [];
+    for (const file of files) {
+      if (file.file) {
+        try {
+          const content = await fetchFileContentFromOneDrive(file, accessToken);
+          if (content) {
+            documents.push({
+              id: file.id,
+              title: file.name,
+              content,
+              category: newCategoryId,
+              description: `File from OneDrive: ${file.name}`
+            })
+          }
+        } catch (error) {
+          console.error(`Error processing file: ${file.name}`, error.message);
+        }
+      } else {
+        console.error.log(`Skipping unsupported or folder: ${file.name}`);
+      }
+    }
 
-    // if (documents.length > 0) {
-    //   console.log("Documents from OneDrive => ", documents);
+    if (documents.length > 0) {
+      console.log("Documents from OneDrive => ", documents);
 
-      // const azureResponse = await pushToAzureSearchFromOneDrive(documents);
-      // return res.status(200).json({
-      //   message: "Sync successful",
-      //   uploaded: documents.length,
-      //   azureResponse
-      // });
-    // } else {
-    //   return res.status(200).json({
-    //     message: "No valid files to sync."
-    //   });
-    // }
+      const azureResponse = await pushToAzureSearchFromOneDrive(documents);
+      return res.status(200).json({
+        message: "Sync successful",
+        uploaded: documents.length,
+        azureResponse
+      });
+    } else {
+      return res.status(200).json({
+        message: "No valid files to sync."
+      });
+    }
   } catch (error) {
     console.error("Error syncing OneDrive data: ", error.message);
     return res.status(500).json({

@@ -6,6 +6,39 @@ const mammoth = require("mammoth");
 const pdf = require("pdf-parse");
 const axios = require("axios");
 
+async function checkExistOfGoogleDriveConfig(client_id, coid) {
+  try {
+    const indexName = `resource_category_${coid.toLowerCase()}`;
+
+    // Check if index exists
+    const indexExists = await client.indices.exists({ index: indexName });
+
+    if (!indexExists) {
+      return "configuration is not existed";
+    }
+
+    const searchClientIdResponse = await client.search({
+      index: indexName,
+      body: {
+        query: {
+          match: {
+            client_id: client_id,
+          },
+        },
+      },
+    });
+
+    if (searchClientIdResponse.hits.total.value > 0) {
+      return "configuration is already existed";
+    } else {
+      return "configuration is not existed";
+    }
+  } catch (error) {
+    console.error("Error checking existance of google drive config in ElasticSearch:", error);
+    throw new Error("Failed to check existance of google drive config in Elasticsearch");
+  }
+}
+
 // Save webhook details in Elasticsearch
 async function saveWebhookDetails(
   resourceId,
@@ -460,4 +493,5 @@ module.exports = {
   pushToAzureSearch,
   registerWebhook,
   fetchAllFileContents,
+  checkExistOfGoogleDriveConfig
 };
