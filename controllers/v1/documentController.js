@@ -2195,7 +2195,8 @@ exports.syncDataFromDatasources = async (req, res) => {
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/sync-google-drive",
           {
-            ...req.body
+            ...req.body,
+            type: "Google Drive"
           },
           {
             headers: {
@@ -2210,7 +2211,8 @@ exports.syncDataFromDatasources = async (req, res) => {
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/mysql",
           {
-            ...req.body
+            ...req.body,
+            type: "SQL Database"
           },
           {
             headers: {
@@ -2225,7 +2227,8 @@ exports.syncDataFromDatasources = async (req, res) => {
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/mongodb",
           {
-            ...req.body
+            ...req.body,
+            type: "NoSQL Database"
           },
           {
             headers: {
