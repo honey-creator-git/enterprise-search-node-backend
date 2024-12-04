@@ -21,6 +21,10 @@ const {
   fetchDataFromMySQL,
   registerMySQLConnection
 } = require("../../webhook/v1/mysqlwebhookServices");
+const {
+  fetchDataFromMongoDB,
+  registerMongoDBConnection
+} = require("../../webhook/v1/mongodbwebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -2099,6 +2103,75 @@ exports.syncMySQLDatabase = async (req, res) => {
       message: "Sync Successful",
       data: syncResponse,
       mysql: registerMySQLConnectionRes
+    });
+  } else {
+    return res.status(200).json({
+      message: "No valid files to sync."
+    })
+  }
+}
+
+exports.syncMongoData = async (req, res) => {
+  const {
+    mongodb_uri,
+    db_name,
+    collection_name,
+    name,
+    type,
+  } = req.body;
+
+  // Ensure that the required parameters are sent in the request
+  if (!mongodb_uri || !db_name || !collection_name) {
+    return res.status(400).json({
+      message: 'MongoDB URI, database name, and collection name must be provided.'
+    });
+  }
+
+  if (!name || !type) {
+    return res.status(400).json({
+      message: "Data source name and type must be set."
+    });
+  }
+
+  const esNewCategoryResponse = await axios.post(
+    "https://es-services.onrender.com/api/v1/category",
+    {
+      name: name,
+      type: type
+    },
+    {
+      headers: {
+        Authorization: req.headers["authorization"],
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+  const result = await fetchDataFromMongoDB({
+    mongoUri: mongodb_uri,
+    database: db_name,
+    collection_name: collection_name,
+    category: newCategoryId
+  });
+
+  const fileData = result.data;
+
+  const registerMongoDBConnectionRes = await registerMongoDBConnection({
+    mongoUri: mongodb_uri,
+    database: db_name,
+    collection_name: collection_name,
+    category: newCategoryId,
+    coid: req.coid
+  });
+
+  if (fileData.length > 0) {
+    const syncResponse = await pushToAzureSearch(fileData, req.coid);
+    return res.status(200).json({
+      message: "Sync Successful",
+      data: syncResponse,
+      mongodb: registerMongoDBConnectionRes
     });
   } else {
     return res.status(200).json({

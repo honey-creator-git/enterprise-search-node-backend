@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@azure/cosmos": "^4.2.0",
     "@azure/identity": "^4.5.0",
     "@azure/search-documents": "^12.1.0",
     "@elastic/elasticsearch": "^8.15.1",
