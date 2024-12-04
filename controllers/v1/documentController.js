@@ -2180,18 +2180,18 @@ exports.syncMongoData = async (req, res) => {
   }
 }
 exports.syncDataFromDatasources = async (req, res) => {
-  if (!req.body.type) {
+  if (!req.query.type) {
     return res.status(400).json({
       message: "Data source type must be set."
     });
   }
 
-  const dataSource_type = req.body.type;
+  const dataSource_type = req.query.type;
   let dataSourceSyncResponse;
 
   try {
     switch (dataSource_type) {
-      case "Google Drive":
+      case "googledrive":
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/sync-google-drive",
           {
@@ -2206,7 +2206,7 @@ exports.syncDataFromDatasources = async (req, res) => {
         );
         break;
 
-      case "SQL Database":
+      case "sql":
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/mysql",
           {
@@ -2221,7 +2221,7 @@ exports.syncDataFromDatasources = async (req, res) => {
         );
         break;
 
-      case "NoSQL Database":
+      case "nosql":
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/mongodb",
           {
