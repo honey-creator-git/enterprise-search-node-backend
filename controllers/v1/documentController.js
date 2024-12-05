@@ -2234,6 +2234,22 @@ exports.syncDataFromDatasources = async (req, res) => {
         );
         break;
 
+      case "onedrive":
+        dataSourceSyncResponse = await axios.post(
+          "https://es-services.onrender.com/api/v1/sync-one-drive",
+          {
+            ...req.body,
+            type: "OneDrive"
+          },
+          {
+            headers: {
+              Authorization: req.headers["authorization"],
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        break;
+
       case "sql":
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/mysql",
