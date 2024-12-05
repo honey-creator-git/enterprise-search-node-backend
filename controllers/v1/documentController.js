@@ -26,6 +26,16 @@ const {
   fetchDataFromMongoDB,
   registerMongoDBConnection
 } = require("../../webhook/v1/mongodbwebhookServices");
+const {
+  registerOneDriveConnection,
+  checkExistOfOneDriveConfig,
+  getAccessToken,
+  getFilesFromOneDrive,
+  fetchFileContentFromOneDrive,
+  createOneDriveSubscription,
+  getStoredCredentials,
+  getFileDetails,
+} = require("../../webhook/v1/onedrivewebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -1915,143 +1925,148 @@ exports.syncOneDrive = async (req, res) => {
     });
   }
 
-  const graphBaseUrl = "http://graph.microsoft.com/v1.0";
+  const graphBaseUrl = "https://graph.microsoft.com/v1.0";
 
-  // Function to get an access token
-  async function getAccessToken() {
-    const tokenEndpoint = `https://login.microsoftonline.com/${tenant_id}/oauth2/v2.0/token`;
+  const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(client_id, req.coid);
 
-    const params = new URLSearchParams();
-    params.append("client_id", client_id);
-    params.append("scope", "https://graph.microsoft.com/.default");
-    params.append("grant_type", "client_credentials");
-    params.append("client_secret", client_secret);
+  console.log("Check Exist of One Drive Response => ", checkExistOfOneDriveConfigResponse);
 
+  if (checkExistOfOneDriveConfigResponse === "configuration is not existed") {
+
+    // Main function to sync data
     try {
-      const response = await axios.post(tokenEndpoint, params, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
+      const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
+
+      // Create subscription and get expirationDateTime
+      const subscription = await createOneDriveSubscription(accessToken, userName);
+      const expirationDateTime = subscription.expirationDateTime;
+
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: datasourceName,
+          type: datasourceType,
+        },
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          },
         }
+      );
+
+      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+      // Save the OneDrive connection with expirationDateTime
+      await registerOneDriveConnection({
+        tenant_id: tenant_id,
+        client_id: client_id,
+        client_secret: client_secret,
+        userName: userName,
+        category: newCategoryId,
+        coid: req.coid,
+        expirationDateTime: expirationDateTime
       });
 
-      return response.data.access_token;
-    } catch (error) {
-      console.error("Failed to get access token:", error.message);
-      throw new Error("Failed to get access token");
-    }
-  }
+      const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
 
-  // Function to fetch files from OneDrive
-  async function getFilesFromOneDrive(accessToken) {
-
-    console.log("Generated Access Token => ", accessToken);
-
-    try {
-      const response = await axios.get(`${graphBaseUrl}/users/${userName}/drive/root/children`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      return response.data.value; // List of files and folders
-    } catch (error) {
-      console.error("Failed to fetch files from OneDrive:", error.message);
-      throw new Error("Failed to fetch files from OneDrive");
-    }
-  }
-
-  // Function to fetch file content from OneDrive
-  async function fetchFileContentFromOneDrive(file, accessToken) {
-    try {
-      if (!file["@microsoft.graph.downloadUrl"]) {
-        console.log(`Skipping folder: ${file.name}`);
-        return null;
-      }
-
-      const response = await axios.get(file["@microsoft.graph.downloadUrl"], {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        responseType: "text"
-      });
-
-      return response.data; // Return the raw file content
-    } catch (error) {
-      console.error(`Error fetching content for file: ${file.name}`, error.message);
-      throw new Error(`Failed to fetch content for file: ${file.name}`);
-    }
-  }
-
-  // Function to push data to Azure Cognitive Search
-  async function pushToAzureSearchFromOneDrive(documents) {
-    try {
-      return await pushToAzureSearch(documents, coid);
-    } catch (error) {
-      console.error("Error pushing data to Azure Search: ", error.message);
-      throw new Error("Failed to push data to Azure Search");
-    }
-  }
-
-  // Main function to sync data
-  try {
-    const accessToken = await getAccessToken();
-    const files = await getFilesFromOneDrive(accessToken);
-
-    // const esNewCategoryResponse = await axios.post(
-    //   "https://es-services.onrender.com/api/v1/category",
-    //   {
-    //     name: datasourceName,
-    //     type: datasourceType,
-    //   },
-    //   {
-    //     headers: {
-    //       Authorization: req.headers["authorization"],
-    //       "Content-Type": "application/json",
-    //     },
-    //   }
-    // );
-
-    // const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
-
-    const documents = [];
-    for (const file of files) {
-      if (file.file) {
-        try {
-          const content = await fetchFileContentFromOneDrive(file, accessToken);
-          if (content) {
-            documents.push({
-              id: file.id,
-              title: file.name,
-              content,
-              category: newCategoryId,
-              description: `File from OneDrive: ${file.name}`
-            })
+      const documents = [];
+      for (const file of files) {
+        if (file) {
+          try {
+            const content = await fetchFileContentFromOneDrive(file, accessToken);
+            if (content) {
+              documents.push({
+                id: file.id,
+                title: file.name,
+                content,
+                category: newCategoryId,
+                description: `File from OneDrive: ${file.name}`
+              })
+            }
+          } catch (error) {
+            console.error(`Error processing file: ${file.name}`, error.message);
           }
-        } catch (error) {
-          console.error(`Error processing file: ${file.name}`, error.message);
+        } else {
+          console.error.log(`Skipping unsupported or folder: ${file.name}`);
         }
-      } else {
-        console.error.log(`Skipping unsupported or folder: ${file.name}`);
       }
+
+      if (documents.length > 0) {
+        const azureResponse = await pushToAzureSearch(documents, req.coid);
+        return res.status(200).json({
+          message: "Sync successful",
+          uploaded: documents.length,
+          azureResponse
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync."
+        });
+      }
+    } catch (error) {
+      console.error("Error syncing OneDrive data: ", error.message);
+      return res.status(500).json({
+        error: 'Failed to sync OneDrive data'
+      });
     }
 
-    if (documents.length > 0) {
-      console.log("Documents from OneDrive => ", documents);
-
-      const azureResponse = await pushToAzureSearchFromOneDrive(documents);
-      return res.status(200).json({
-        message: "Sync successful",
-        uploaded: documents.length,
-        azureResponse
-      });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync."
-      });
-    }
-  } catch (error) {
-    console.error("Error syncing OneDrive data: ", error.message);
-    return res.status(500).json({
-      error: 'Failed to sync OneDrive data'
+  } else if (checkExistOfOneDriveConfigResponse === "configuration is already existed") {
+    return res.status(200).json({
+      data: "This one drive is already configured."
     });
   }
 
 }
+
+exports.oneDriveWebhook = async (req, res) => {
+  const { value } = req.body;
+
+  if (value && value.length > 0) {
+    const notification = value[0];
+
+    if (notification.resource && notification.changeType) {
+      const fileId = notification.resourceId;  // The file ID from the notification
+      const userName = notification.resource.split('/')[0];  // Extract userName from the notification (adjust if needed)
+
+      try {
+        const credentials = await getStoredCredentials(userName);  // Retrieve stored credentials from DB
+        if (!credentials) {
+          console.error("No credentials found for user:", userName);
+          return res.status(404).send("User credentials not found");
+        }
+
+        const { tenant_id, client_id, client_secret } = credentials;
+        const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
+
+        // Get the file details using the file ID
+        const file = await getFileDetails(fileId, accessToken, userName);
+
+        console.log("File details:", file); // Now you have the file metadata
+
+        // Handle the change based on notification
+        if (notification.changeType === 'updated' || notification.changeType === 'created') {
+          const content = await fetchFileContentFromOneDrive(file, accessToken);
+          await pushToAzureSearch([{
+            id: file.id,
+            title: file.name,
+            content,
+            description: `File from OneDrive: ${file.name}`
+          }]);
+          console.log(`Processed file: ${file.name}`);
+        }
+
+        return res.status(200).send("Notification processed");
+      } catch (error) {
+        console.error("Error processing notification:", error.message);
+        return res.status(500).send("Failed to process notification");
+      }
+    }
+  }
+
+  // Respond with 202 to acknowledge receipt of the notification
+  res.status(202).send("Notification received");
+};
 
 exports.syncMySQLDatabase = async (req, res) => {
   const {

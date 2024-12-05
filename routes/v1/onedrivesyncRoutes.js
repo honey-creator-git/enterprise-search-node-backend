@@ -11,4 +11,6 @@ router.post(
   documentController.syncOneDrive
 );
 
+router.post("/webhook", documentController.oneDriveWebhook);
+
 module.exports = router;
