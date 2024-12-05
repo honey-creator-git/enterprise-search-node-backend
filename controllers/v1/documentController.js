@@ -2239,7 +2239,7 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/sync-one-drive",
           {
             ...req.body,
-            type: "OneDrive"
+            datasourceType: "OneDrive"
           },
           {
             headers: {
