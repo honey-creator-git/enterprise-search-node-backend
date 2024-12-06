@@ -1,6 +1,78 @@
 
 const client = require("./../../config/elasticsearch");
 const axios = require("axios");
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
+const cheerio = require('cheerio');
+const XLSX = require('xlsx');
+
+async function extractTextFromPdf(buffer) {
+    try {
+        const data = await pdfParse(buffer);
+        return data.text; // Extracted text from the PDF file
+    } catch (error) {
+        console.error("Error extracting text from PDF:", error);
+        throw new Error("Failed to extract text from PDF");
+    }
+}
+async function extractTextFromDoc(buffer) {
+    try {
+        const { value } = await mammoth.extractRawText({ buffer });
+        return value; // Extracted text from the DOC file
+    } catch (error) {
+        console.error("Error extracting text from DOC:", error);
+        throw new Error("Failed to extract text from DOC");
+    }
+}
+
+async function extractTextFromDocx(buffer) {
+    try {
+        const { value } = await mammoth.extractRawText({ buffer });
+        return value; // Extracted text from the DOCX file
+    } catch (error) {
+        console.error("Error extracting text from DOCX:", error);
+        throw new Error("Failed to extract text from DOCX");
+    }
+}
+
+async function extractTextFromHtml(htmlContent) {
+    try {
+        const $ = cheerio.load(htmlContent);
+        return $('body').text(); // Extract the text inside the body tag
+    } catch (error) {
+        console.error("Error extracting text from HTML:", error);
+        throw new Error("Failed to extract text from HTML");
+    }
+}
+
+async function extractTextFromXlsx(buffer) {
+    try {
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        let textContent = '';
+
+        workbook.SheetNames.forEach(sheetName => {
+            const sheet = workbook.Sheets[sheetName];
+            const jsonSheetData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert sheet to array of rows
+            jsonSheetData.forEach(row => {
+                textContent += row.join(' ') + '\n'; // Join columns and add line breaks between rows
+            });
+        });
+
+        return textContent; // Return combined text content from the spreadsheet
+    } catch (error) {
+        console.error("Error extracting text from XLSX:", error);
+        throw new Error("Failed to extract text from XLSX");
+    }
+}
+
+async function extractTextFromTxt(textContent) {
+    try {
+        return textContent; // Return the raw text content of the TXT file
+    } catch (error) {
+        console.error("Error extracting text from TXT:", error);
+        throw new Error("Failed to extract text from TXT");
+    }
+}
 
 async function checkExistOfOneDriveConfig(client_id, coid) {
     try {
@@ -106,9 +178,10 @@ async function registerOneDriveConnection(config) {
 
 // Function to create OneDrive subscription
 async function createOneDriveSubscription(accessToken, userName) {
+    console.log("Creating OneDrive subscription for user:", userName);
     const subscriptionData = {
-        changeType: "updated,created,deleted",  // Listen for created, updated, or deleted events
-        notificationUrl: "https://es-services.onrender.com/api/v1/sync-one-drive/webhook",  // URL to receive notifications
+        changeType: "updated",  // Listen for created, updated, or deleted events
+        notificationUrl: "https://2f09-188-43-33-252.ngrok-free.app/api/v1/sync-one-drive/webhook",  // URL to receive notifications
         resource: `users/${userName}/drive/root`,  // Listen for changes in the user's OneDrive
         expirationDateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),  // 1 hour from now
         clientState: "clientStateValue"  // Optional: any state to track the subscription
@@ -127,9 +200,15 @@ async function createOneDriveSubscription(accessToken, userName) {
                 }
             }
         );
+        console.log("Subscription created:", response.data);  // Log the response for debugging
         return response.data;
     } catch (error) {
-        console.error("Error creating subscription:", error.message);
+        if (error.response) {
+            console.error("Error response:", error.response.data);  // Log full error response
+            console.error("Error status:", error.response.status);  // Log status code
+        } else {
+            console.error("Error message:", error.message);  // Log message if response is unavailable
+        }
         throw new Error("Failed to create subscription");
     }
 }
@@ -159,7 +238,7 @@ async function getAccessToken(tenant_id, client_id, client_secret) {
 }
 
 // Helper function to fetch files within a specific folder
-async function getFolderFiles(folderId, accessToken) {
+async function getFolderFiles(folderId, accessToken, graphBaseUrl, userName) {
     const folderFiles = [];
     try {
         const response = await axios.get(`${graphBaseUrl}/users/${userName}/drive/items/${folderId}/children`, {
@@ -187,7 +266,7 @@ async function getFilesFromOneDrive(accessToken, graphBaseUrl, userName) {
 
         for (const folder of response.data.value) {
             if (folder.folder && folder.folder.childCount > 0) {
-                const folderFiles = await getFolderFiles(folder.id, accessToken); // Fetch files from the folder
+                const folderFiles = await getFolderFiles(folder.id, accessToken, graphBaseUrl, userName); // Fetch files from the folder
                 files = files.concat(folderFiles);
             }
         }
@@ -207,12 +286,29 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
             return null;
         }
 
+        const fileType = file.name.split('.').pop(); // Extract file extension
+
         const response = await axios.get(file["@microsoft.graph.downloadUrl"], {
             headers: { Authorization: `Bearer ${accessToken}` },
-            responseType: "text"
+            responseType: fileType === 'txt' || fileType === 'json' || fileType === 'html' ? 'text' : 'arraybuffer'
         });
 
-        return response.data; // Return the raw file content
+        if (fileType === 'txt' || fileType === 'json') {
+            return extractTextFromTxt(response.data);
+        } else if (fileType === 'html') {
+            return extractTextFromHtml(response.data);
+        } else if (fileType === 'pdf') {
+            return extractTextFromPdf(Buffer.from(response.data, 'binary'));
+        } else if (fileType === 'doc') {
+            return extractTextFromDoc(Buffer.from(response.data, 'binary'));
+        } else if (fileType === 'docx') {
+            return extractTextFromDocx(Buffer.from(response.data, 'binary'));
+        } else if (fileType === 'xlsx') {
+            return extractTextFromXlsx(Buffer.from(response.data, 'binary'));
+        } else {
+            console.log(`Unsupported file type: ${fileType}`);
+            return null;
+        }
     } catch (error) {
         console.error(`Error fetching content for file: ${file.name}`, error.message);
         throw new Error(`Failed to fetch content for file: ${file.name}`);
@@ -254,6 +350,7 @@ async function getStoredCredentials(userName) {
                     tenant_id: storedCredentials.tenantId,
                     client_id: storedCredentials.clientId,
                     client_secret: storedCredentials.clientSecret,
+                    category: storedCredentials.category,
                     expirationDateTime: storedCredentials.expirationDateTime, // Include this if needed
                 };
             }
