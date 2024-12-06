@@ -1693,6 +1693,26 @@ exports.syncGoogleDrive = async (req, res) => {
           console.log("No valid files to sync.");
         }
       }
+
+      //   const ws = new WebSocket("ws://localhost:8080");
+
+      //   // Send the message to the websocket server
+      //   ws.onopen = () => {
+      //     // Send a message to the server to sync google drive documents
+      //     ws.send(JSON.stringify({
+      //       gc_accessToken: gc_accessToken,
+      //       gc_refreshToken: gc_refreshToken,
+      //       client_id: client_id,
+      //       client_secret: client_secret,
+      //       categoryId: newCategoryId,
+      //       coid: req.coid,
+      //     }));
+      //   }
+
+      //   ws.onmessage = (event) => {
+      //     const message = JSON.parse(event.data);
+      //     console.log("Received message: ", message);
+      //   }
     });
   } else if (checkExistOfGoogleDriveConfigResponse === "configuration is already existed") {
     return res.status(200).json({
@@ -1700,7 +1720,6 @@ exports.syncGoogleDrive = async (req, res) => {
     });
   }
 };
-
 
 exports.googleDriveWebhook = async (req, res) => {
   const resourceId = req.headers["x-goog-resource-id"];

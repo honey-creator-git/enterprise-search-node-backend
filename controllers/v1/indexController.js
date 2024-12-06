@@ -489,23 +489,105 @@ exports.deleteCategory = async (req, res) => {
   const categoryId = req.params.categoryId;
 
   try {
-    const response = await client.delete({
+    // Step 1: Fetch the document from the main category index
+    const documentResponse = await client.get({
       index: categoryIndex,
       id: categoryId,
     });
 
+    if (!documentResponse.found) {
+      return res.status(404).json({
+        message: `Document with ID "${categoryId}" not found in index ${categoryIndex}.`,
+      });
+    }
+
+    // Extract the type from the retrieved document
+    const type = documentResponse._source.type;
+    console.log(`Document Type: ${type}`);
+
+    // Step 2: Perform additional deletions based on the document type
+    if (type === "Google Drive") {
+      const resourceCategoryIndex = `resource_category_${req.coid.toLowerCase()}`;
+      await client.deleteByQuery({
+        index: resourceCategoryIndex,
+        body: {
+          query: {
+            match: {
+              categoryId: categoryId,
+            },
+          },
+        },
+      });
+      console.log(`Deleted related Google Drive document(s) from index ${resourceCategoryIndex}`);
+    } else if (type === "OneDrive") {
+      const onedriveIndex = `datasource_onedrive_connection_${req.coid.toLowerCase()}`;
+      await client.deleteByQuery({
+        index: onedriveIndex,
+        body: {
+          query: {
+            match: {
+              category: categoryId,
+            },
+          },
+        },
+      });
+      console.log(`Deleted related OneDrive document(s) from index ${onedriveIndex}`);
+    } else if (type === "SQL Database") {
+      const sqlIndex = `datasource_mysql_connection_${req.coid.toLowerCase()}`;
+      await client.deleteByQuery({
+        index: sqlIndex,
+        body: {
+          query: {
+            match: {
+              category: categoryId,
+            },
+          },
+        },
+      });
+      console.log(`Deleted related SQL Database document(s) from index ${sqlIndex}`);
+    } else if (type === "NoSQL Database") {
+      const nosqlIndex = `datasource_mongodb_connection_${req.coid.toLowerCase()}`;
+      await client.deleteByQuery({
+        index: nosqlIndex,
+        body: {
+          query: {
+            match: {
+              category: categoryId,
+            },
+          },
+        },
+      });
+      console.log(`Deleted related NoSQL Database document(s) from index ${nosqlIndex}`);
+    } else {
+      console.log(`No additional deletion logic defined for type: ${type}`);
+    }
+
+    // Step 3: Delete the document from the main category index
+    const deleteResponse = await client.delete({
+      index: categoryIndex,
+      id: categoryId,
+    });
+
+    // Return success response
     res.status(200).json({
       message: `Category with ID "${categoryId}" deleted successfully from index ${categoryIndex}.`,
-      response: response,
+      response: deleteResponse,
     });
   } catch (error) {
     console.error("Error deleting category: ", error);
+    if (error.meta && error.meta.body && error.meta.body.found === false) {
+      return res.status(404).json({
+        error: `Category with ID "${categoryId}" not found in index ${categoryIndex}.`,
+      });
+    }
+
     res.status(500).json({
       error: "Failed to delete category",
       details: error.message,
     });
   }
 };
+
 
 exports.updateCategory = async (req, res) => {
   const categoryIndex = `datasources_${req.coid.toLowerCase()}`;
