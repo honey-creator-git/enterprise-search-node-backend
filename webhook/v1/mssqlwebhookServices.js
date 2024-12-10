@@ -180,7 +180,7 @@ async function fetchAndProcessFieldContent(config) {
 
             if (processedContent) {
                 documents.push({
-                    id: row.Id,
+                    id: row.Id.toString(),
                     content: processedContent,
                     title: config.title || "No Title Provided",
                     description: config.description || "No Description Provided",
