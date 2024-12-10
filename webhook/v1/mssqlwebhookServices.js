@@ -155,7 +155,7 @@ async function fetchAndProcessFieldContent(config) {
 
     try {
         console.log(`Fetching data from table: ${config.table_name}, field: ${config.field_name}...`);
-        const query = `SELECT ${config.field_name}, Id FROM ${config.table_name}`; // Ensure `Id` is available for Azure Search indexing
+        const query = `SELECT [${config.field_name}], [Id] FROM [dbo].[${config.table_name}]`; // Ensure `Id` is available for Azure Search indexing
         const result = await connection.query(query);
         const rows = result.recordset;
 
