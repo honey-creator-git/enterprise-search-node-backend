@@ -139,12 +139,12 @@ async function processFieldContent(content, fieldType, jsonProperties, xmlPaths)
     }
 }
 
-async function fetchAndProcessFieldContent(config) {
+async function fetchAndProcessFieldContent(config, coid) {
     const dbConfig = {
         user: config.db_user,
         password: config.db_password,
         server: config.db_host,
-        databse: config.db_database,
+        database: config.db_database,
         options: {
             encrypt: true, // For Azure MSSQL
             trustServerCertificate: false,
@@ -154,8 +154,11 @@ async function fetchAndProcessFieldContent(config) {
     const connection = await sql.connect(dbConfig);
 
     try {
-        console.log(`Fetching data from table: ${config.table_name}, field: ${config.field_name}...`);
-        const query = `SELECT [${config.field_name}], [Id] FROM [dbo].[${config.table_name}]`; // Ensure `Id` is available for Azure Search indexing
+        // Use schema and escape identifiers
+        const query = `SELECT [${config.field_name}], [Id] FROM [dbo].[${config.table_name}]`;
+        console.log("Database Configuration:", dbConfig);
+        console.log("Executing Query:", query);
+
         const result = await connection.query(query);
         const rows = result.recordset;
 
@@ -164,7 +167,7 @@ async function fetchAndProcessFieldContent(config) {
             return [];
         }
 
-        const processedData = [];
+        const documents = [];
 
         for (const row of rows) {
             const fieldValue = row[config.field_name];
@@ -176,20 +179,23 @@ async function fetchAndProcessFieldContent(config) {
             );
 
             if (processedContent) {
-                processedData.push({
-                    id: row.Id, // Use the row's Id as the document ID in Azure Search
-                    content: processedContent, // Processed content for indexing
-                    title: config.title || "No Title Provided", // Provide default or dynamic title if available
-                    description: config.description || "No Description Provided", // Provide default or dynamic description
-                    image: config.image || null, // Optional image field
-                    category: config.category || "default", // Optional category field
+                documents.push({
+                    id: row.Id,
+                    content: processedContent,
+                    title: config.title || "No Title Provided",
+                    description: config.description || "No Description Provided",
+                    image: config.image || null,
+                    category: config.category || "default",
                 });
             }
         }
 
-        console.log(`Processed ${processedData.length} rows.`);
+        console.log(`Processed ${documents.length} rows. Saving to Azure Search index...`);
 
-        return processedData;
+        return documents;
+    } catch (error) {
+        console.error("Error during MSSQL Sync:", error.message);
+        throw new Error("Failed to fetch and process field content");
     } finally {
         await connection.close();
     }
