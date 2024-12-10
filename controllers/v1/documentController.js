@@ -2317,14 +2317,14 @@ exports.syncMSSQLDatabase = async (req, res) => {
 
       // Step 3: Save MSSQL connection details to Elastic Search
       await saveMSSQLConnection({
-        db_host,
-        db_user,
-        db_password,
-        db_database,
-        table_name,
-        field_name,
-        field_type,
-        newCategoryId,
+        host: db_host,
+        user: db_user,
+        password: db_password,
+        database: db_database,
+        table_name: table_name,
+        field_name: field_name,
+        field_type: field_type,
+        category: newCategoryId,
         coid: req.coid
       });
 

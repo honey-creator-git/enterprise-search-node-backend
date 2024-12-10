@@ -201,9 +201,8 @@ async function fetchAndProcessFieldContent(config) {
     }
 }
 
-async function saveMSSQLConnection(host, user, password, database, table_name, field_name, field_type, category, coid) {
+async function saveMSSQLConnection({ host, user, password, database, table_name, field_name, field_type, category, coid }) {
     try {
-
         if (!coid) {
             throw new Error("coid is undefined or invalid.");
         }
