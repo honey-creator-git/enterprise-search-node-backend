@@ -139,7 +139,7 @@ async function processFieldContent(content, fieldType, jsonProperties, xmlPaths)
     }
 }
 
-async function fetchAndProcessFieldContent(config, coid) {
+async function fetchAndProcessFieldContent(config) {
     const dbConfig = {
         user: config.db_user,
         password: config.db_password,
@@ -203,6 +203,11 @@ async function fetchAndProcessFieldContent(config, coid) {
 
 async function saveMSSQLConnection(host, user, password, database, table_name, field_name, field_type, category, coid) {
     try {
+
+        if (!coid) {
+            throw new Error("coid is undefined or invalid.");
+        }
+
         const indexName = `datasource_mssql_connection_${coid.toLowerCase()}`;
 
         const document = {
@@ -217,6 +222,8 @@ async function saveMSSQLConnection(host, user, password, database, table_name, f
             coid,
             updatedAt: new Date().toISOString(),
         };
+
+        console.log("Saving MSSQL Connection:", document);
 
         // Check if index exists
         const indexExists = await client.indices.exists({ index: indexName });
