@@ -2324,8 +2324,8 @@ exports.syncMSSQLDatabase = async (req, res) => {
         table_name,
         field_name,
         field_type,
-        coid: req.coid,
         category: newCategoryId,
+        coid: req.coid,
       });
 
       // Step 4: Push processed data to Azure Search
