@@ -129,7 +129,46 @@ async function registerMySQLConnection(config) {
     }
 }
 
+async function checkExistOfMySQLConfig(host, database, table_name, coid) {
+    try {
+        const indexName = `datasource_mysql_connection_${coid.toLowerCase()}`;
+
+        // Check if index exists
+        const indexExists = await client.indices.exists({ index: indexName });
+
+        if (!indexExists) {
+            return "MySQL configuration is not existed";
+        }
+
+        // Search for the MySQL configuration with all conditions (AND operator)
+        const searchResponse = await client.search({
+            index: indexName,
+            body: {
+                query: {
+                    bool: {
+                        must: [
+                            { match: { host: host } },
+                            { match: { database: database } },
+                            { match: { table_name: table_name } }
+                        ],
+                    },
+                },
+            },
+        });
+
+        if (searchResponse.hits.total.value > 0) {
+            return "MySQL configuration is already existed";
+        } else {
+            return "MySQL configuration is not existed";
+        }
+    } catch (error) {
+        console.error("Error checking existance of MySQL config in ElasticSearch:", error);
+        throw new Error("Failed to check existance of MySQL config in Elasticsearch");
+    }
+}
+
 module.exports = {
+    checkExistOfMySQLConfig,
     fetchDataFromMySQL,
     registerMySQLConnection
 }

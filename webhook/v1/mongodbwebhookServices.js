@@ -118,7 +118,46 @@ async function registerMongoDBConnection(config) {
     }
 }
 
+async function checkExistOfMongoDBConfig(mongoUri, database, collection_name, coid) {
+    try {
+        const indexName = `datasource_mongodb_connection_${coid.toLowerCase()}`;
+
+        // Check if the index exists
+        const indexExists = await client.indices.exists({ index: indexName });
+
+        if (!indexExists) {
+            return "MongoDB configuration does not exist";
+        }
+
+        // Search for the MSSQL configuration with all conditions (AND operator)
+        const searchResponse = await client.search({
+            index: indexName,
+            body: {
+                query: {
+                    bool: {
+                        must: [
+                            { match: { mongoUri: mongoUri } },
+                            { match: { database: database } },
+                            { match: { collection_name: collection_name } }
+                        ],
+                    },
+                },
+            },
+        });
+
+        if (searchResponse.hits.total.value > 0) {
+            return "MongoDB configuration already exists";
+        } else {
+            return "MongoDB configuration does not exist";
+        }
+    } catch (error) {
+        console.error("Error checking existence of MongoDB config in Elasticsearch:", error.message);
+        throw new Error("Failed to check existence of MongoDB config in Elasticsearch");
+    }
+}
+
 module.exports = {
+    checkExistOfMongoDBConfig,
     registerMongoDBConnection,
     fetchDataFromMongoDB
 }

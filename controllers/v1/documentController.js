@@ -19,10 +19,12 @@ const {
   checkExistOfGoogleDriveConfig,
 } = require("../../webhook/v1/googlewebhookServices");
 const {
+  checkExistOfMySQLConfig,
   fetchDataFromMySQL,
   registerMySQLConnection
 } = require("../../webhook/v1/mysqlwebhookServices");
 const {
+  checkExistOfMongoDBConfig,
   fetchDataFromMongoDB,
   registerMongoDBConnection
 } = require("../../webhook/v1/mongodbwebhookServices");
@@ -36,6 +38,11 @@ const {
   getStoredCredentials,
   getFileDetails,
 } = require("../../webhook/v1/onedrivewebhookServices");
+const {
+  checkExistOfMSSQLConfig,
+  saveMSSQLConnection,
+  fetchAndProcessFieldContent
+} = require("../../webhook/v1/mssqlwebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -60,11 +67,11 @@ exports.addDocument = async (req, res) => {
   const indexName = req.params.indexName?.toLowerCase(); // Get the index name from the URL parameter
   const document = req.body; // Get the document data from the request body
 
-  const searchClientForNewDocument = new SearchClient(
-    process.env.AZURE_SEARCH_ENDPOINT,
-    indexName,
-    new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
-  );
+  // const searchClientForNewDocument = new SearchClient(
+  //   process.env.AZURE_SEARCH_ENDPOINT,
+  //   indexName,
+  //   new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
+  // );
 
   try {
     // Check if the nidex exists before attempting to add a document
@@ -73,83 +80,86 @@ exports.addDocument = async (req, res) => {
     });
 
     if (!esExists) {
-      await client.indices.create({
-        index: indexName,
-        body: {
-          settings: {
-            number_of_shards: 1,
-            number_of_replicas: 1,
-          },
-          mappings: {
-            properties: {
-              title: { type: "text" },
-              description: { type: "text" },
-              content: { type: "text" },
-              image: { type: "keyword" },
-            },
-          },
-        },
+      return res.status(404).json({
+        message: "Index is not existed.",
       });
+      // await client.indices.create({
+      //   index: indexName,
+      //   body: {
+      //     settings: {
+      //       number_of_shards: 1,
+      //       number_of_replicas: 1,
+      //     },
+      //     mappings: {
+      //       properties: {
+      //         title: { type: "text" },
+      //         description: { type: "text" },
+      //         content: { type: "text" },
+      //         image: { type: "keyword" },
+      //       },
+      //     },
+      //   },
+      // });
     }
 
     // Check if the Azure Cognitive Search index exists
-    const azExists = await searchIndexClient
-      .getIndex(indexName)
-      .catch(() => null);
+    // const azExists = await searchIndexClient
+    //   .getIndex(indexName)
+    //   .catch(() => null);
 
-    if (!azExists) {
-      // Define Azure Cognitive Search index schema
-      const indexSchema = {
-        name: indexName,
-        fields: [
-          { name: "id", type: "Edm.String", key: true, searchable: false },
-          {
-            name: "title",
-            type: "Edm.String",
-            searchable: true,
-            filterable: true,
-            sortable: true,
-          },
-          {
-            name: "description",
-            type: "Edm.String",
-            searchable: true,
-            filterable: true,
-            sortable: true,
-          },
-          {
-            name: "content",
-            type: "Edm.String",
-            searchable: true,
-            filterable: true,
-            sortable: true,
-          },
-          {
-            name: "image",
-            type: "Edm.String",
-            searchable: true,
-            filterable: false,
-            sortable: false,
-          },
-        ],
-        semantic: {
-          configurations: [
-            {
-              name: "es-semantic-config",
-              prioritizedFields: {
-                titleField: { fieldName: "title" },
-                prioritizedContentFields: [
-                  { fieldName: "description" },
-                  { fieldName: "content" },
-                ],
-              },
-            },
-          ],
-        },
-      };
+    // if (!azExists) {
+    //   // Define Azure Cognitive Search index schema
+    //   const indexSchema = {
+    //     name: indexName,
+    //     fields: [
+    //       { name: "id", type: "Edm.String", key: true, searchable: false },
+    //       {
+    //         name: "title",
+    //         type: "Edm.String",
+    //         searchable: true,
+    //         filterable: true,
+    //         sortable: true,
+    //       },
+    //       {
+    //         name: "description",
+    //         type: "Edm.String",
+    //         searchable: true,
+    //         filterable: true,
+    //         sortable: true,
+    //       },
+    //       {
+    //         name: "content",
+    //         type: "Edm.String",
+    //         searchable: true,
+    //         filterable: true,
+    //         sortable: true,
+    //       },
+    //       {
+    //         name: "image",
+    //         type: "Edm.String",
+    //         searchable: true,
+    //         filterable: false,
+    //         sortable: false,
+    //       },
+    //     ],
+    //     semantic: {
+    //       configurations: [
+    //         {
+    //           name: "es-semantic-config",
+    //           prioritizedFields: {
+    //             titleField: { fieldName: "title" },
+    //             prioritizedContentFields: [
+    //               { fieldName: "description" },
+    //               { fieldName: "content" },
+    //             ],
+    //           },
+    //         },
+    //       ],
+    //     },
+    //   };
 
-      await searchIndexClient.createIndex(indexSchema);
-    }
+    //   await searchIndexClient.createIndex(indexSchema);
+    // }
 
     // Add the document to the specified index
     const esResponse = await client.index({
@@ -158,18 +168,18 @@ exports.addDocument = async (req, res) => {
     });
 
     // Add the document to Azure Cognitive Search
-    const azDocument = {
-      ...document,
-      id: esResponse._id.slice(1), // Assign Elasticsearch document ID as the Azure document ID
-    };
-    const azResponse = await searchClientForNewDocument.uploadDocuments([
-      azDocument,
-    ]);
+    // const azDocument = {
+    //   ...document,
+    //   id: esResponse._id.slice(1), // Assign Elasticsearch document ID as the Azure document ID
+    // };
+    // const azResponse = await searchClientForNewDocument.uploadDocuments([
+    //   azDocument,
+    // ]);
 
     res.status(201).json({
-      message: `Document added to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
+      message: `Document added to Elasticsearch index successfully.`,
       elasticsearchResponse: esResponse,
-      azureResponse: azResponse,
+      // azureResponse: azResponse,
     });
   } catch (error) {
     console.error("Error adding document: ", error);
@@ -1942,8 +1952,8 @@ exports.syncOneDrive = async (req, res) => {
 
   const graphBaseUrl = "https://graph.microsoft.com/v1.0";
 
-  const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(client_id, req.coid);
-
+  // const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(client_id, req.coid);
+  const checkExistOfOneDriveConfigResponse = "configuration is not existed";
   console.log("Check Exist of One Drive Response => ", checkExistOfOneDriveConfigResponse);
 
   if (checkExistOfOneDriveConfigResponse === "configuration is not existed") {
@@ -1953,35 +1963,35 @@ exports.syncOneDrive = async (req, res) => {
       const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
 
       // Create subscription and get expirationDateTime
-      const subscription = await createOneDriveSubscription(accessToken, userName);
-      const expirationDateTime = subscription.expirationDateTime;
+      // const subscription = await createOneDriveSubscription(accessToken, userName);
+      // const expirationDateTime = subscription.expirationDateTime;
 
-      const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
-        {
-          name: datasourceName,
-          type: datasourceType,
-        },
-        {
-          headers: {
-            Authorization: req.headers["authorization"],
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // const esNewCategoryResponse = await axios.post(
+      //   "https://es-services.onrender.com/api/v1/category",
+      //   {
+      //     name: datasourceName,
+      //     type: datasourceType,
+      //   },
+      //   {
+      //     headers: {
+      //       Authorization: req.headers["authorization"],
+      //       "Content-Type": "application/json",
+      //     },
+      //   }
+      // );
 
-      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      // const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
       // Save the OneDrive connection with expirationDateTime
-      await registerOneDriveConnection({
-        tenant_id: tenant_id,
-        client_id: client_id,
-        client_secret: client_secret,
-        userName: userName,
-        category: newCategoryId,
-        coid: req.coid,
-        expirationDateTime: expirationDateTime
-      });
+      // await registerOneDriveConnection({
+      //   tenant_id: tenant_id,
+      //   client_id: client_id,
+      //   client_secret: client_secret,
+      //   userName: userName,
+      //   category: newCategoryId,
+      //   coid: req.coid,
+      //   expirationDateTime: expirationDateTime
+      // });
 
       const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
 
@@ -2107,56 +2117,64 @@ exports.syncMySQLDatabase = async (req, res) => {
     });
   }
 
-  const esNewCategoryResponse = await axios.post(
-    "https://es-services.onrender.com/api/v1/category",
-    {
-      name: name,
-      type: type
-    },
-    {
-      headers: {
-        Authorization: req.headers["authorization"],
-        "Content-Type": "application/json"
+  const checkExistOfMySQLConfigResponse = await checkExistOfMySQLConfig(db_host, db_database, table_name, req.coid);
+
+  if (checkExistOfMySQLConfigResponse === "MySQL configuration is not existed") {
+    const esNewCategoryResponse = await axios.post(
+      "https://es-services.onrender.com/api/v1/category",
+      {
+        name: name,
+        type: type
+      },
+      {
+        headers: {
+          Authorization: req.headers["authorization"],
+          "Content-Type": "application/json"
+        }
       }
-    }
-  );
+    );
 
-  const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-  const result = await fetchDataFromMySQL({
-    host: db_host,
-    user: db_user,
-    password: db_password,
-    database: db_database,
-    table_name: table_name,
-    category: newCategoryId
-  });
-
-  const fileData = result.data;
-  const lastProcessedId = result.lastProcessedId;
-
-  const registerMySQLConnectionRes = await registerMySQLConnection({
-    host: db_host,
-    user: db_user,
-    password: db_password,
-    database: db_database,
-    table_name: table_name,
-    category: newCategoryId,
-    coid: req.coid,
-    lastProcessedId: lastProcessedId,
-  });
-
-  if (fileData.length > 0) {
-    const syncResponse = await pushToAzureSearch(fileData, req.coid);
-    return res.status(200).json({
-      message: "Sync Successful",
-      data: syncResponse,
-      mysql: registerMySQLConnectionRes
+    const result = await fetchDataFromMySQL({
+      host: db_host,
+      user: db_user,
+      password: db_password,
+      database: db_database,
+      table_name: table_name,
+      category: newCategoryId
     });
+
+    const fileData = result.data;
+    const lastProcessedId = result.lastProcessedId;
+
+    const registerMySQLConnectionRes = await registerMySQLConnection({
+      host: db_host,
+      user: db_user,
+      password: db_password,
+      database: db_database,
+      table_name: table_name,
+      category: newCategoryId,
+      coid: req.coid,
+      lastProcessedId: lastProcessedId,
+    });
+
+    if (fileData.length > 0) {
+      const syncResponse = await pushToAzureSearch(fileData, req.coid);
+      return res.status(200).json({
+        message: "Sync Successful",
+        data: syncResponse,
+        mysql: registerMySQLConnectionRes
+      });
+    } else {
+      return res.status(200).json({
+        message: "No valid files to sync."
+      })
+    }
   } else {
     return res.status(200).json({
-      message: "No valid files to sync."
-    })
+      data: "This MySQL server had been already configured."
+    });
   }
 }
 
@@ -2182,52 +2200,161 @@ exports.syncMongoData = async (req, res) => {
     });
   }
 
-  const esNewCategoryResponse = await axios.post(
-    "https://es-services.onrender.com/api/v1/category",
-    {
-      name: name,
-      type: type
-    },
-    {
-      headers: {
-        Authorization: req.headers["authorization"],
-        "Content-Type": "application/json"
+  const checkExistofMongoDBConfigResponse = await checkExistOfMongoDBConfig(mongodb_uri, db_name, collection_name, req.coid);
+
+  if (checkExistofMongoDBConfigResponse === "MongoDB configuration does not exist") {
+    const esNewCategoryResponse = await axios.post(
+      "https://es-services.onrender.com/api/v1/category",
+      {
+        name: name,
+        type: type
+      },
+      {
+        headers: {
+          Authorization: req.headers["authorization"],
+          "Content-Type": "application/json"
+        }
       }
-    }
-  );
+    );
 
-  const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-  const result = await fetchDataFromMongoDB({
-    mongoUri: mongodb_uri,
-    database: db_name,
-    collection_name: collection_name,
-    category: newCategoryId
-  });
-
-  const fileData = result.data;
-
-  const registerMongoDBConnectionRes = await registerMongoDBConnection({
-    mongoUri: mongodb_uri,
-    database: db_name,
-    collection_name: collection_name,
-    category: newCategoryId,
-    coid: req.coid
-  });
-
-  if (fileData.length > 0) {
-    const syncResponse = await pushToAzureSearch(fileData, req.coid);
-    return res.status(200).json({
-      message: "Sync Successful",
-      data: syncResponse,
-      mongodb: registerMongoDBConnectionRes
+    const result = await fetchDataFromMongoDB({
+      mongoUri: mongodb_uri,
+      database: db_name,
+      collection_name: collection_name,
+      category: newCategoryId
     });
+
+    const fileData = result.data;
+
+    const registerMongoDBConnectionRes = await registerMongoDBConnection({
+      mongoUri: mongodb_uri,
+      database: db_name,
+      collection_name: collection_name,
+      category: newCategoryId,
+      coid: req.coid
+    });
+
+    if (fileData.length > 0) {
+      const syncResponse = await pushToAzureSearch(fileData, req.coid);
+      return res.status(200).json({
+        message: "Sync Successful",
+        data: syncResponse,
+        mongodb: registerMongoDBConnectionRes
+      });
+    } else {
+      return res.status(200).json({
+        message: "No valid files to sync."
+      })
+    }
   } else {
     return res.status(200).json({
-      message: "No valid files to sync."
-    })
+      data: "This MongoDB server had been already configured."
+    });
   }
 }
+
+exports.syncMSSQLDatabase = async (req, res) => {
+  const {
+    db_host,
+    db_user,
+    db_password,
+    db_database,
+    table_name,
+    field_name,
+    field_type,
+    json_properties, // For JSON fields
+    xml_paths, // For XML fields
+    name,
+    type,
+  } = req.body;
+
+  if (!name || !type) {
+    return res.status(400).json({
+      message: "Data source name and type must be set.",
+    });
+  }
+
+  const checkExistOfMSSQLConfigResponse = await checkExistOfMSSQLConfig(db_host, db_database, table_name, field_name, req.coid);
+  // const checkExistOfMSSQLConfigResponse = "MSSQL configuration does not exist";
+  console.log("Check Exist of MSSQL Response => ", checkExistOfMSSQLConfigResponse);
+
+  if (checkExistOfMSSQLConfigResponse === "MSSQL configuration does not exist") {
+    try {
+      // Step 1: Create a new category in Elastic Search
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: name,
+          type: type,
+        },
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          }
+        }
+      );
+
+      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+      // Step 2: Fetch and process data from MSSQL
+      const result = await fetchAndProcessFieldContent({
+        db_host,
+        db_user,
+        db_password,
+        db_database,
+        table_name,
+        field_name,
+        field_type,
+        json_properties,
+        xml_paths,
+        category: newCategoryId,
+      });
+
+      const fileData = result;
+
+      // Step 3: Save MSSQL connection details to Elastic Search
+      await saveMSSQLConnection({
+        db_host,
+        db_user,
+        db_password,
+        db_database,
+        table_name,
+        field_name,
+        field_type,
+        coid: req.coid,
+        category: newCategoryId,
+      });
+
+      // Step 4: Push processed data to Azure Search
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        return res.status(200).json({
+          message: "Sync Successful",
+          count: fileData.length,
+          data: syncResponse,
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid data to sync.",
+        });
+      }
+    } catch (error) {
+      console.error("Error during MSSQL Sync:", error.message);
+      return res.status(500).json({
+        message: "MSSQL Sync failed",
+        error: error.message,
+      });
+    }
+  } else {
+    return res.status(200).json({
+      data: "This MSSQL server had been already configured."
+    });
+  }
+}
+
 exports.syncDataFromDatasources = async (req, res) => {
   if (!req.query.type) {
     return res.status(400).json({
