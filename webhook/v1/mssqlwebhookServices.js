@@ -182,25 +182,31 @@ async function fetchAndProcessFieldContent(config) {
                 WHERE name = 'trg_${config.table_name}_ChangeLog'
             )
             BEGIN
-                CREATE TRIGGER trg_${config.table_name}_ChangeLog
-                ON dbo.[${config.table_name}]
-                AFTER INSERT, UPDATE
-                AS
-                BEGIN
-                    INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, ChangedField, OldValue, NewValue, ChangeTime)
-                    SELECT
-                        CASE
-                            WHEN EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted) THEN 'UPDATE'
-                            WHEN EXISTS (SELECT * FROM inserted) THEN 'INSERT'
-                        END,
-                        i.Id,
-                        '${config.field_name}',
-                        d.${config.field_name},
-                        i.${config.field_name},
-                        GETDATE()
-                    FROM inserted i
-                    LEFT JOIN deleted d ON i.Id = d.Id;
-                END;
+                EXEC('
+                    CREATE TRIGGER trg_${config.table_name}_ChangeLog
+                    ON dbo.[${config.table_name}]
+                    AFTER INSERT, UPDATE
+                    AS
+                    BEGIN
+                        SET NOCOUNT ON;
+                        IF EXISTS (SELECT * FROM inserted)
+                        BEGIN
+                            INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, ChangedField, OldValue, NewValue, ChangeTime)
+                            SELECT
+                                CASE
+                                    WHEN EXISTS (SELECT * FROM deleted) THEN ''UPDATE''
+                                    ELSE ''INSERT''
+                                END,
+                                i.Id,
+                                ''${config.field_name}'',
+                                d.${config.field_name},
+                                i.${config.field_name},
+                                GETDATE()
+                            FROM inserted i
+                            LEFT JOIN deleted d ON i.Id = d.Id;
+                        END
+                    END
+                ');
             END
         `;
         await connection.query(checkTriggerQuery);
@@ -218,6 +224,7 @@ async function fetchAndProcessFieldContent(config) {
             return [];
         }
 
+        // Step 4: Process Data
         const documents = [];
 
         for (const row of rows) {
