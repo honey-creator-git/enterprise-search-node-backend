@@ -62,34 +62,6 @@ app.use("/api/v1/mssql", mssqlRoutes);
 // use sync data source routes
 app.use("/api/v1/", dataSourceRoutes);
 
-app.get("/api/v1/sync-one-drive/webhook", (req, res) => {
-  const validationToken = req.query.validationToken;
-
-  // Respond with validation token to confirm webhook is valid
-  if (validationToken) {
-    console.log("Webhook validation success");
-    return res.status(200).send(validationToken);
-  } else {
-    console.log("Invalid validation request");
-    return res.status(400).send("Invalid request");
-  }
-});
-
-app.post("/api/v1/sync-one-drive/webhook", (req, res) => {
-  console.log("Request Headers:", req.headers);
-  console.log("Notification received:", req.body); // This will show the full notification body
-
-  // If you want to log the raw body for debugging purposes:
-  req.on('data', (chunk) => {
-    console.log("Raw data chunk:", chunk.toString());
-  });
-
-  // Respond with 202 to acknowledge the notification
-  res.status(202).send("Accepted");
-});
-
-
-
 // Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

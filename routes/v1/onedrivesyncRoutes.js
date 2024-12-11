@@ -11,7 +11,7 @@ router.post(
   documentController.syncOneDrive
 );
 
-// router.post("/webhook", documentController.oneDriveWebhook);
+router.post("/webhook", documentController.oneDriveWebhook);
 
 // Handle GET request for webhook validation (sent by Microsoft Graph)
 // router.get("/webhook", documentController.oneDriveWebhook);
