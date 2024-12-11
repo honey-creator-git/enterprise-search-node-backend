@@ -5,6 +5,10 @@ const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
 const cheerio = require('cheerio');
 const XLSX = require('xlsx');
+const pptParser = require('ppt-parser');
+const RTFParser = require('rtf-parser');
+const { parseStringPromise } = require('xml2js');
+const parseCsv = require('csv-parser');
 
 async function extractTextFromPdf(buffer) {
     try {
@@ -71,6 +75,78 @@ async function extractTextFromTxt(textContent) {
     } catch (error) {
         console.error("Error extracting text from TXT:", error);
         throw new Error("Failed to extract text from TXT");
+    }
+}
+
+async function extractTextFromCsv(data) {
+    const results = [];
+    return new Promise((resolve, reject) => {
+        const stream = require('stream');
+        const readable = new stream.Readable();
+        readable.push(data);
+        readable.push(null);
+
+        readable
+            .pipe(parseCsv())
+            .on('data', (row) => results.push(row))
+            .on('end', () => resolve(JSON.stringify(results, null, 2)))
+            .on('error', (err) => reject(err));
+    });
+}
+
+async function extractTextFromXml(data) {
+    try {
+        const result = await parseStringPromise(data);
+        return JSON.stringify(result, null, 2);
+    } catch (error) {
+        console.error("Failed to parse XML:", error.message);
+        throw error;
+    }
+}
+
+async function extractTextFromRtx(data) {
+    return new Promise((resolve, reject) => {
+        RTFParser.parseString(data, (err, doc) => {
+            if (err) return reject(err);
+            let text = '';
+            doc.content.forEach((block) => {
+                if (block.type === 'text') {
+                    text += block.value;
+                }
+            });
+            resolve(text);
+        });
+    });
+}
+
+async function extractTextFromPpt(buffer) {
+    const result = await pptParser.parse(buffer);
+    return result.text || 'No text found';
+}
+
+async function extractTextFromPptx(buffer) {
+    const result = await pptParser.parse(buffer);
+    return result.text || 'No text found';
+}
+
+async function extractTextFromJson(data) {
+    try {
+        // Parse the JSON data if it is in string format
+        const jsonData = typeof data === "string" ? JSON.parse(data) : data;
+
+        // Convert JSON into a readable format (e.g., stringified)
+        const formattedText = JSON.stringify(jsonData, null, 2); // Pretty-print with 2 spaces
+
+        // Optionally: Extract specific fields if needed
+        // Example: Collect all keys and values into a single string
+        // const extractedFields = Object.entries(jsonData)
+        //     .map(([key, value]) => `${key}: ${value}`)
+        //     .join("\n");
+
+        return formattedText; // Or return extractedFields if needed
+    } catch (error) {
+        console.error("Error processing JSON content:", error.message);
+        throw new Error("Failed to process JSON content");
     }
 }
 
@@ -180,8 +256,8 @@ async function registerOneDriveConnection(config) {
 async function createOneDriveSubscription(accessToken, userName) {
     console.log("Creating OneDrive subscription for user:", userName);
     const subscriptionData = {
-        changeType: "updated",  // Listen for created, updated, or deleted events
-        notificationUrl: "https://2f09-188-43-33-252.ngrok-free.app/api/v1/sync-one-drive/webhook",  // URL to receive notifications
+        changeType: "updated", // Listen for all updates (add, update, delete)
+        notificationUrl: "https://es-services.onrender.com/api/v1/sync-one-drive/webhook",  // URL to receive notifications
         resource: `users/${userName}/drive/root`,  // Listen for changes in the user's OneDrive
         expirationDateTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),  // 1 hour from now
         clientState: "clientStateValue"  // Optional: any state to track the subscription
@@ -286,17 +362,23 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
             return null;
         }
 
-        const fileType = file.name.split('.').pop(); // Extract file extension
+        const fileType = file.name.split('.').pop().toLowerCase(); // Extract file extension and make it lowercase
 
         const response = await axios.get(file["@microsoft.graph.downloadUrl"], {
             headers: { Authorization: `Bearer ${accessToken}` },
-            responseType: fileType === 'txt' || fileType === 'json' || fileType === 'html' ? 'text' : 'arraybuffer'
+            responseType: ['txt', 'json', 'html', 'csv', 'xml', 'rtx'].includes(fileType) ? 'text' : 'arraybuffer',
         });
 
-        if (fileType === 'txt' || fileType === 'json') {
+        if (fileType === 'txt') {
             return extractTextFromTxt(response.data);
+        } else if (fileType === 'json') {
+            return extractTextFromJson(response.data);
         } else if (fileType === 'html') {
             return extractTextFromHtml(response.data);
+        } else if (fileType === 'csv') {
+            return extractTextFromCsv(response.data);
+        } else if (fileType === 'xml') {
+            return extractTextFromXml(response.data);
         } else if (fileType === 'pdf') {
             return extractTextFromPdf(Buffer.from(response.data, 'binary'));
         } else if (fileType === 'doc') {
@@ -305,6 +387,12 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
             return extractTextFromDocx(Buffer.from(response.data, 'binary'));
         } else if (fileType === 'xlsx') {
             return extractTextFromXlsx(Buffer.from(response.data, 'binary'));
+        } else if (fileType === 'rtx') {
+            return extractTextFromRtx(response.data);
+        } else if (fileType === 'ppt') {
+            return extractTextFromPpt(Buffer.from(response.data, 'binary'));
+        } else if (fileType === 'pptx') {
+            return extractTextFromPptx(Buffer.from(response.data, 'binary'));
         } else {
             console.log(`Unsupported file type: ${fileType}`);
             return null;

@@ -1952,9 +1952,8 @@ exports.syncOneDrive = async (req, res) => {
 
   const graphBaseUrl = "https://graph.microsoft.com/v1.0";
 
-  // const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(client_id, req.coid);
-  const checkExistOfOneDriveConfigResponse = "configuration is not existed";
-  console.log("Check Exist of One Drive Response => ", checkExistOfOneDriveConfigResponse);
+  const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(client_id, req.coid);
+  // const checkExistOfOneDriveConfigResponse = "configuration is not existed";
 
   if (checkExistOfOneDriveConfigResponse === "configuration is not existed") {
 
@@ -1968,70 +1967,71 @@ exports.syncOneDrive = async (req, res) => {
 
       console.log("Expiration Time => ", expirationDateTime);
 
-      // const esNewCategoryResponse = await axios.post(
-      //   "https://es-services.onrender.com/api/v1/category",
-      //   {
-      //     name: datasourceName,
-      //     type: datasourceType,
-      //   },
-      //   {
-      //     headers: {
-      //       Authorization: req.headers["authorization"],
-      //       "Content-Type": "application/json",
-      //     },
-      //   }
-      // );
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: datasourceName,
+          type: datasourceType,
+        },
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-      // const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
       // Save the OneDrive connection with expirationDateTime
-      // await registerOneDriveConnection({
-      //   tenant_id: tenant_id,
-      //   client_id: client_id,
-      //   client_secret: client_secret,
-      //   userName: userName,
-      //   category: newCategoryId,
-      //   coid: req.coid,
-      //   expirationDateTime: expirationDateTime
-      // });
+      await registerOneDriveConnection({
+        tenant_id: tenant_id,
+        client_id: client_id,
+        client_secret: client_secret,
+        userName: userName,
+        category: newCategoryId,
+        coid: req.coid,
+        expirationDateTime: expirationDateTime
+      });
 
-      // const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
+      const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
 
-      // const documents = [];
-      // for (const file of files) {
-      //   if (file) {
-      //     try {
-      //       const content = await fetchFileContentFromOneDrive(file, accessToken);
-      //       if (content) {
-      //         documents.push({
-      //           id: file.id,
-      //           title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
-      //           content,
-      //           // category: newCategoryId,
-      //           description: `File from OneDrive: ${file.name}`
-      //         })
-      //       }
-      //     } catch (error) {
-      //       console.error(`Error processing file: ${file.name}`, error.message);
-      //     }
-      //   } else {
-      //     console.error.log(`Skipping unsupported or folder: ${file.name}`);
-      //   }
-      // }
+      const documents = [];
+      for (const file of files) {
+        if (file) {
+          try {
+            const content = await fetchFileContentFromOneDrive(file, accessToken);
+            if (content) {
+              documents.push({
+                id: file.id,
+                title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                content,
+                category: newCategoryId,
+                image: null,
+                description: `File from OneDrive: ${file.name}`
+              })
+            }
+          } catch (error) {
+            console.error(`Error processing file: ${file.name}`, error.message);
+          }
+        } else {
+          console.error.log(`Skipping unsupported or folder: ${file.name}`);
+        }
+      }
 
-      // if (documents.length > 0) {
-      //   // const azureResponse = await pushToAzureSearch(documents, req.coid);
-      //   return res.status(200).json({
-      //     message: "Sync successful",
-      //     count: documents.length,
-      //     uploaded: documents,
-      //     // azureResponse
-      //   });
-      // } else {
-      //   return res.status(200).json({
-      //     message: "No valid files to sync."
-      //   });
-      // }
+      if (documents.length > 0) {
+        const azureResponse = await pushToAzureSearch(documents, req.coid);
+        return res.status(200).json({
+          message: "Sync successful",
+          count: documents.length,
+          uploaded: documents,
+          azureResponse
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync."
+        });
+      }
     } catch (error) {
       console.error("Error syncing OneDrive data: ", error.message);
       return res.status(500).json({
@@ -2048,58 +2048,72 @@ exports.syncOneDrive = async (req, res) => {
 }
 
 exports.oneDriveWebhook = async (req, res) => {
-  const { value } = req.body;
 
-  console.log("Received notification: ", value);
-
-  if (value && value.length > 0) {
-    const notification = value[0];
-
-    if (notification.resource && notification.changeType) {
-      const fileId = notification.resourceId;  // The file ID from the notification
-      const changeType = notification.changeType; // Get the change type (created, updated, deleted)
-      const userName = notification.resource.split('/')[0];  // Extract userName from the notification (adjust if needed)
-
-      console.log(`File changed: ${fileId} with change type: ${changeType}`);
-
-      try {
-        const credentials = await getStoredCredentials(userName);  // Retrieve stored credentials from DB
-        if (!credentials) {
-          console.error("No credentials found for user:", userName);
-          return res.status(404).send("User credentials not found");
-        }
-
-        const { tenant_id, client_id, client_secret, category } = credentials;
-        const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
-
-        // Get the file details using the file ID
-        const file = await getFileDetails(fileId, accessToken, userName);
-
-        console.log("File details:", file); // Now you have the file metadata
-
-        // Handle the change based on notification
-        if (notification.changeType === 'updated' || notification.changeType === 'created') {
-          const content = await fetchFileContentFromOneDrive(file, accessToken);
-          await pushToAzureSearch([{
-            id: file.id,
-            title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
-            content,
-            category,
-            description: `File from OneDrive: ${file.name}`
-          }]);
-          console.log(`Processed file: ${file.name}`);
-        }
-
-        return res.status(200).send("Notification processed");
-      } catch (error) {
-        console.error("Error processing notification:", error.message);
-        return res.status(500).send("Failed to process notification");
-      }
-    }
+  if (req.query && req.query.validationToken) {
+    return res.status(200).send(req.query.validationToken); // Respond to validation request
   }
 
-  // Respond with 202 to acknowledge receipt of the notification
-  res.status(202).send("Notification received");
+  const { value } = req.body;
+  console.log("Received notification:", JSON.stringify(value, null, 2));
+
+  if (value && value.length > 0) {
+    try {
+      const notifications = value.map(async (notification) => {
+
+        if (notification.resource && notification.changeType) {
+          const fileId = notification.resourceData.id;  // The file ID from the notification
+          const changeType = notification.changeType; // Get the change type (created, updated, deleted)
+          const userName = notification.resource.split('/')[0];  // Extract userName from the notification (adjust if needed)
+
+          console.log(`File changed: ${fileId} with change type: ${changeType}`);
+
+          try {
+            const credentials = await getStoredCredentials(userName);  // Retrieve stored credentials from DB
+            if (!credentials) {
+              console.error("No credentials found for user:", userName);
+              return res.status(404).send("User credentials not found");
+            }
+
+            const { tenant_id, client_id, client_secret, category } = credentials;
+            const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
+
+            // Get the file details using the file ID
+            const file = await getFileDetails(fileId, accessToken, userName);
+
+            console.log("File details:", file); // Now you have the file metadata
+
+            // Handle the change based on notification
+            if (notification.changeType === 'updated') {
+              const content = await fetchFileContentFromOneDrive(file, accessToken);
+              await pushToAzureSearch([{
+                id: file.id,
+                title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                content,
+                category,
+                image: null,
+                description: `File from OneDrive: ${file.name}`
+              }]);
+              console.log(`Processed file: ${file.name}`);
+            }
+
+
+            return res.status(200).send("Notification processed");
+          } catch (error) {
+            console.error("Error processing notification:", error.message);
+            return res.status(500).send("Failed to process notification");
+          }
+        }
+      });
+
+      await Promise.all(notifications);
+      res.status(200).send("Notification processed");
+    } catch (error) {
+      console.error("Error processing webhook:", error.message);
+      res.status(500).send("Failed to process notification");
+    }
+  } else {
+    res.status(400).send("Invalid notification payload");
+  }
 };
 
 exports.syncMySQLDatabase = async (req, res) => {
