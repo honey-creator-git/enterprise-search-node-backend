@@ -5,7 +5,6 @@ const cheerio = require("cheerio");
 const XLSX = require("xlsx");
 const sql = require("mssql");
 
-
 async function extractTextFromCsv(content) {
     return content; // Process CSV content if needed
 }

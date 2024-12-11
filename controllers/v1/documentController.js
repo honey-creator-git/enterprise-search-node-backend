@@ -20,7 +20,7 @@ const {
 } = require("../../webhook/v1/googlewebhookServices");
 const {
   checkExistOfMySQLConfig,
-  fetchDataFromMySQL,
+  fetchAndProcessFieldContentOfMySQL,
   registerMySQLConnection
 } = require("../../webhook/v1/mysqlwebhookServices");
 const {
@@ -2107,6 +2107,10 @@ exports.syncMySQLDatabase = async (req, res) => {
     db_password,
     db_database,
     table_name,
+    field_name,
+    field_type,
+    json_properties, // For JSON fields
+    xml_paths, // For XML fields
     name,
     type
   } = req.body;
@@ -2136,12 +2140,16 @@ exports.syncMySQLDatabase = async (req, res) => {
 
     const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    const result = await fetchDataFromMySQL({
+    const result = await fetchAndProcessFieldContentOfMySQL({
       host: db_host,
       user: db_user,
       password: db_password,
       database: db_database,
       table_name: table_name,
+      field_name: field_name,
+      field_type: field_type,
+      json_properties: json_properties,
+      xml_paths: xml_paths,
       category: newCategoryId
     });
 
@@ -2154,6 +2162,8 @@ exports.syncMySQLDatabase = async (req, res) => {
       password: db_password,
       database: db_database,
       table_name: table_name,
+      field_name: field_name,
+      field_type: field_type,
       category: newCategoryId,
       coid: req.coid,
       lastProcessedId: lastProcessedId,
@@ -2277,8 +2287,6 @@ exports.syncMSSQLDatabase = async (req, res) => {
   }
 
   const checkExistOfMSSQLConfigResponse = await checkExistOfMSSQLConfig(db_host, db_database, table_name, field_name, req.coid);
-  // const checkExistOfMSSQLConfigResponse = "MSSQL configuration does not exist";
-  console.log("Check Exist of MSSQL Response => ", checkExistOfMSSQLConfigResponse);
 
   if (checkExistOfMSSQLConfigResponse === "MSSQL configuration does not exist") {
     try {

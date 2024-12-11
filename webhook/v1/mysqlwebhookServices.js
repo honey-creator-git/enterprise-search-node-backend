@@ -1,9 +1,146 @@
 
 const client = require("./../../config/elasticsearch");
 const mysql = require("mysql2/promise");
+const mammoth = require("mammoth");
+const pdfParse = require("pdf-parse");
+const cheerio = require("cheerio");
+const XLSX = require("xlsx");
 const fs = require('fs'); // To read the SSL certificate file
 
-async function saveMySQLConnection(host, user, password, database, table_name, category, coid, lastProcessedId) {
+async function extractTextFromCsv(content) {
+    return content; // Process CSV content if needed
+}
+
+async function extractTextFromDocx(buffer) {
+    const { value } = await mammoth.extractRawText({ buffer });
+    return value;
+}
+
+async function extractTextFromPdf(buffer) {
+    const data = await pdfParse(buffer);
+    return data.text;
+}
+
+// XML Path Helper
+function getValueFromXmlPath(obj, path) {
+    const parts = path.split(".");
+    let current = obj;
+    for (const part of parts) {
+        current = current[part];
+        if (!current) return null;
+    }
+    return current.toString();
+}
+
+async function extractTextFromXml(content, paths) {
+    const xml2js = require("xml2js");
+    const parser = new xml2js.Parser();
+
+    return new Promise((resolve, reject) => {
+        parser.parseString(content, (err, result) => {
+            if (err) {
+                console.error("Error parsing XML:", err);
+                return reject(err);
+            }
+
+            if (!paths || paths.length === 0) {
+                resolve(JSON.stringify(result));
+            } else {
+                const extracted = paths
+                    .map((path) => getValueFromXmlPath(result, path))
+                    .filter(Boolean)
+                    .join(" ");
+                resolve(extracted);
+            }
+        });
+    });
+}
+
+async function extractTextFromJson(content, properties) {
+    try {
+        const jsonData = JSON.parse(content);
+        if (!properties || properties.length === 0) {
+            return JSON.stringify(jsonData);
+        }
+
+        const extracted = properties.map((prop) => jsonData[prop] || "").join(" ");
+        return extracted;
+    } catch (err) {
+        console.error("Error extracting JSON content:", err);
+        return null;
+    }
+}
+
+// Text Extraction Functions
+async function extractTextFromTxt(content) {
+    return content;
+}
+
+async function extractTextFromXlsx(buffer) {
+    try {
+        const workbook = XLSX.read(buffer, { type: "buffer" }); // Read the XLSX file buffer
+        let textContent = '';
+
+        workbook.SheetNames.forEach(sheetName => {
+            const sheet = workbook.Sheets[sheetName]; // Access each sheet
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert sheet to array of rows
+
+            rows.forEach(row => {
+                textContent += row.join(' ') + '\n'; // Combine columns into a single line and add a newline
+            });
+        });
+
+        return textContent.trim(); // Return combined text content
+    } catch (error) {
+        console.error("Error extracting text from XLSX:", error);
+        throw new Error("Failed to extract text from XLSX");
+    }
+}
+
+async function extractTextFromHtml(htmlContent) {
+    try {
+        const $ = cheerio.load(htmlContent); // Load the HTML content
+        return $('body').text().trim(); // Extract and return the text inside the <body> tag
+    } catch (error) {
+        console.error("Error extracting text from HTML:", error);
+        throw new Error("Failed to extract text from HTML");
+    }
+}
+
+async function processFieldContent(content, fieldType, jsonProperties, xmlPaths) {
+    switch (fieldType.toUpperCase()) {
+        case "TXT":
+            return extractTextFromTxt(content);
+
+        case "JSON":
+            return extractTextFromJson(content, jsonProperties);
+
+        case "XML":
+            return extractTextFromXml(content, xmlPaths);
+
+        case "HTML":
+            return extractTextFromHtml(content);
+
+        case "XLSX":
+            return extractTextFromXlsx(Buffer.from(content, "binary"));
+
+        case "PDF":
+            return extractTextFromPdf(Buffer.from(content, "binary"));
+
+        case "DOC":
+        case "DOCX":
+            return extractTextFromDocx(Buffer.from(content, "binary"));
+
+        case "CSV":
+            return extractTextFromCsv(content);
+
+        default:
+            console.log(`Unsupported field type: ${fieldType}`);
+            return null;
+    }
+}
+
+async function saveMySQLConnection(host, user, password, database, table_name, field_name, field_type, category, coid, lastProcessedId) {
     try {
         const indexName = `datasource_mysql_connection_${coid.toLowerCase()}`;
 
@@ -13,6 +150,8 @@ async function saveMySQLConnection(host, user, password, database, table_name, c
             password,
             database,
             table_name,
+            field_name,
+            field_type,
             category,
             coid,
             lastProcessedId: lastProcessedId || 0, // Default to 0 if not provided
@@ -35,6 +174,8 @@ async function saveMySQLConnection(host, user, password, database, table_name, c
                             password: { type: "text" },
                             database: { type: "text" },
                             table_name: { type: "text" },
+                            field_name: { type: "text" },
+                            field_type: { type: "text" },
                             category: { type: "text" },
                             coid: { type: "keyword" },
                             lastProcessedId: { type: "long" },
@@ -64,7 +205,7 @@ async function saveMySQLConnection(host, user, password, database, table_name, c
         throw new Error("Failed to save mysql connection to ElasticSearch");
     }
 }
-async function fetchDataFromMySQL(config) {
+async function fetchAndProcessFieldContentOfMySQL(config) {
     const connection = await mysql.createConnection({
         host: config.host,
         user: config.user,
@@ -80,8 +221,8 @@ async function fetchDataFromMySQL(config) {
 
         // Fetch rows where `id` is greater than the last processed ID
         const [rows] = await connection.query(
-            `SELECT * FROM ${config.table_name} WHERE id > ? ORDER BY id ASC`,
-            [config.lastProcessedId || 0] // Use lastProcessedId if available, otherwise start from 0
+            `SELECT id, ${config.field_name} AS field_value FROM ${config.table_name} WHERE id > ? ORDER BY id ASC`,
+            [config.lastProcessedId || 0]
         );
 
         if (rows.length === 0) {
@@ -94,24 +235,41 @@ async function fetchDataFromMySQL(config) {
 
         console.log(`Fetched ${rows.length} new rows from the table.`);
 
-        // Map rows to the required format
-        const data = rows.map((row) => ({
-            id: row.id.toString(),
-            title: row.title,
-            content: row.content,
-            description: row.description,
-            image: row.image,
-            category: config.category,
-        }));
+        const documents = [];
 
-        // Find the last processed ID from the fetched rows
+        for (const row of rows) {
+            let processedContent;
+
+            try {
+                // Process the content based on field type
+                processedContent = await processFieldContent(
+                    row.field_value,
+                    config.field_type,
+                    config.json_properties,
+                    config.xml_paths
+                );
+            } catch (error) {
+                console.error(`Failed to process content for row ID ${row.id}:`, error.message);
+                continue;
+            }
+
+            if (processedContent) {
+                documents.push({
+                    id: row.id.toString(),
+                    content: processedContent,
+                    title: config.title || `Row ID ${row.id}`, // Use provided title or fallback
+                    description: config.description || "No description provided",
+                    image: config.image || null,
+                    category: config.category,
+                });
+            }
+        }
+
         const lastProcessedId = rows[rows.length - 1].id;
-
         console.log(`Last Processed ID: ${lastProcessedId}`);
 
-        // Return the data and the last processed ID
         return {
-            data,
+            data: documents,
             lastProcessedId,
         };
     } finally {
@@ -122,7 +280,7 @@ async function fetchDataFromMySQL(config) {
 
 async function registerMySQLConnection(config) {
     try {
-        return await saveMySQLConnection(config.host, config.user, config.password, config.database, config.table_name, config.category, config.coid, config.lastProcessedId);
+        return await saveMySQLConnection(config.host, config.user, config.password, config.database, config.table_name, config.field_name, config.field_type, config.category, config.coid, config.lastProcessedId);
     } catch (saveError) {
         console.error("Failed to save mysql connection: ", saveError.message);
         throw new Error("Failed to save mysql connection");
@@ -169,6 +327,6 @@ async function checkExistOfMySQLConfig(host, database, table_name, coid) {
 
 module.exports = {
     checkExistOfMySQLConfig,
-    fetchDataFromMySQL,
+    fetchAndProcessFieldContentOfMySQL,
     registerMySQLConnection
 }
