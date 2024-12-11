@@ -2193,6 +2193,10 @@ exports.syncMongoData = async (req, res) => {
     mongodb_uri,
     db_name,
     collection_name,
+    field_name,
+    field_type,
+    json_properties,
+    xml_paths,
     name,
     type,
   } = req.body;
@@ -2233,6 +2237,10 @@ exports.syncMongoData = async (req, res) => {
       mongoUri: mongodb_uri,
       database: db_name,
       collection_name: collection_name,
+      field_name: field_name,
+      field_type: field_type,
+      json_properties: json_properties,
+      xml_paths: xml_paths,
       category: newCategoryId
     });
 
@@ -2242,6 +2250,8 @@ exports.syncMongoData = async (req, res) => {
       mongoUri: mongodb_uri,
       database: db_name,
       collection_name: collection_name,
+      field_name: field_name,
+      field_type: field_type,
       category: newCategoryId,
       coid: req.coid
     });
