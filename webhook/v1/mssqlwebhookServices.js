@@ -154,7 +154,58 @@ async function fetchAndProcessFieldContent(config) {
     const connection = await sql.connect(dbConfig);
 
     try {
-        // Use schema and escape identifiers
+        // Step 1: Check and Create Change Log Table
+        const changeLogTable = `${config.table_name}_ChangeLog`;
+        const checkChangeLogTableQuery = `
+            IF NOT EXISTS (
+                SELECT * FROM INFORMATION_SCHEMA.TABLES 
+                WHERE TABLE_NAME = '${changeLogTable}'
+            )
+            BEGIN
+                CREATE TABLE dbo.[${changeLogTable}] (
+                    LogID INT IDENTITY PRIMARY KEY,
+                    ActionType NVARCHAR(50),
+                    RowID INT,
+                    ChangedField NVARCHAR(255),
+                    OldValue NVARCHAR(MAX),
+                    NewValue NVARCHAR(MAX),
+                    ChangeTime DATETIME DEFAULT GETDATE()
+                );
+            END
+        `;
+        await connection.query(checkChangeLogTableQuery);
+
+        // Step 2: Check and Create Trigger
+        const checkTriggerQuery = `
+            IF NOT EXISTS (
+                SELECT * FROM sys.triggers 
+                WHERE name = 'trg_${config.table_name}_ChangeLog'
+            )
+            BEGIN
+                CREATE TRIGGER trg_${config.table_name}_ChangeLog
+                ON dbo.[${config.table_name}]
+                AFTER INSERT, UPDATE
+                AS
+                BEGIN
+                    INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, ChangedField, OldValue, NewValue, ChangeTime)
+                    SELECT
+                        CASE
+                            WHEN EXISTS (SELECT * FROM inserted) AND EXISTS (SELECT * FROM deleted) THEN 'UPDATE'
+                            WHEN EXISTS (SELECT * FROM inserted) THEN 'INSERT'
+                        END,
+                        i.Id,
+                        '${config.field_name}',
+                        d.${config.field_name},
+                        i.${config.field_name},
+                        GETDATE()
+                    FROM inserted i
+                    LEFT JOIN deleted d ON i.Id = d.Id;
+                END;
+            END
+        `;
+        await connection.query(checkTriggerQuery);
+
+        // Step 3: Fetch Data from the Table
         const query = `SELECT [${config.field_name}], [Id] FROM [dbo].[${config.table_name}]`;
         console.log("Database Configuration:", dbConfig);
         console.log("Executing Query:", query);
