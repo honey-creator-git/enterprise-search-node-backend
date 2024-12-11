@@ -2431,6 +2431,22 @@ exports.syncDataFromDatasources = async (req, res) => {
         );
         break;
 
+      case "mssql":
+        dataSourceSyncResponse = await axios.post(
+          "https://es-services.onrender.com/api/v1/mssql",
+          {
+            ...req.body,
+            type: "MSSQL"
+          },
+          {
+            headers: {
+              Authorization: req.headers["authorization"],
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        break;
+
       default:
         return res.status(400).json({
           message: "Unsupported data source type."
