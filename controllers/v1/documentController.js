@@ -24,6 +24,11 @@ const {
   registerMySQLConnection
 } = require("../../webhook/v1/mysqlwebhookServices");
 const {
+  registerPostgreSQLConnection,
+  checkExistOfPostgreSQLConfig,
+  fetchAndProcessFieldContentOfPostgreSQL
+} = require("../../webhook/v1/postgresqlwebhookServices");
+const {
   checkExistOfMongoDBConfig,
   fetchDataFromMongoDB,
   registerMongoDBConnection
@@ -36,8 +41,13 @@ const {
   fetchFileContentFromOneDrive,
   createOneDriveSubscription,
   getStoredCredentials,
-  getFileDetails,
 } = require("../../webhook/v1/onedrivewebhookServices");
+const {
+  saveSharePointTokensToElasticSearch,
+  fetchAllAccessibleSites,
+  getAccessTokenOfSharePoint,
+  checkExistOfSharePointConfig
+} = require("../../webhook/v1/sharepointwebhookServices");
 const {
   checkExistOfMSSQLConfig,
   saveMSSQLConnection,
@@ -2041,7 +2051,7 @@ exports.syncOneDrive = async (req, res) => {
 
   } else if (checkExistOfOneDriveConfigResponse === "configuration is already existed") {
     return res.status(200).json({
-      data: "This one drive is already configured."
+      data: "This OneDrive is already configured."
     });
   }
 
@@ -2213,6 +2223,95 @@ exports.syncMySQLDatabase = async (req, res) => {
   } else {
     return res.status(200).json({
       data: "This MySQL server had been already configured."
+    });
+  }
+}
+
+exports.syncPostgreSQLDatabase = async (req, res) => {
+  const {
+    db_host,
+    db_user,
+    db_password,
+    db_database,
+    table_name,
+    field_name,
+    field_type,
+    json_properties, // For JSON fields
+    xml_paths, // For XML fields
+    name,
+    type
+  } = req.body;
+
+  if (!name || !type) {
+    return res.status(400).json({
+      message: "Data source name and type must be set."
+    });
+  }
+
+  // const checkExistOfPostgreSQLConfigResponse = await checkExistOfPostgreSQLConfig(db_host, db_database, table_name, req.coid);
+  const checkExistOfPostgreSQLConfigResponse = "PostgreSQL configuration is not existed";
+
+  if (checkExistOfPostgreSQLConfigResponse === "PostgreSQL configuration is not existed") {
+    const esNewCategoryResponse = await axios.post(
+      "https://es-services.onrender.com/api/v1/category",
+      {
+        name: name,
+        type: type,
+      },
+      {
+        headers: {
+          Authorization: req.headers["authorization"],
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+
+    const result = await fetchAndProcessFieldContentOfPostgreSQL({
+      host: db_host,
+      user: db_user,
+      password: db_password,
+      database: db_database,
+      table_name: table_name,
+      field_name: field_name,
+      field_type: field_type,
+      json_properties: json_properties,
+      xml_paths: xml_paths,
+      category: newCategoryId
+    });
+
+    const fileData = result.data;
+    const lastProcessedId = result.lastProcessedId;
+
+    const registerPostgreSQLConnectionRes = await registerPostgreSQLConnection({
+      host: db_host,
+      user: db_user,
+      password: db_password,
+      database: db_database,
+      table_name: table_name,
+      field_name: field_name,
+      field_type: field_type,
+      category: newCategoryId,
+      coid: req.coid,
+      lastProcessedId: lastProcessedId
+    });
+
+    if (fileData.length > 0) {
+      const syncResponse = await pushToAzureSearch(fileData, req.coid);
+      return res.status(200).json({
+        messag: "Sync Successful",
+        data: syncResponse,
+        postgresql: registerPostgreSQLConnectionRes
+      });
+    } else {
+      return res.status(200).json({
+        message: "No valid files to sync."
+      });
+    }
+  } else {
+    return res.status(200).json({
+      data: "This PostgreSQL server had been already configured."
     });
   }
 }
@@ -2399,6 +2498,96 @@ exports.syncMSSQLDatabase = async (req, res) => {
     return res.status(200).json({
       data: "This MSSQL server had been already configured."
     });
+  }
+}
+
+exports.syncSharePointOnlineDatabase = async (req, res) => {
+  const {
+    tenant_id,
+    client_id,
+    client_secret,
+    datasourceName,
+    datasourceType,
+  } = req.body;
+
+  if (!tenant_id || !client_id || !client_secret || !datasourceName || !datasourceType) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+
+  // Step 1: Check if the configuration already exists in ElasticSearch
+  // const checkExistOfSharePointConfigResponse = await checkExistOfSharePointConfig(client_id, req.coid);
+  const checkExistOfSharePointConfigResponse = "configuration is not existed";
+
+  if (checkExistOfSharePointConfigResponse === "configuration is not existed") {
+
+    // Main Function to sync data
+    try {
+      // Step 2: Generate Access Token
+      const tokenDoc = await getAccessTokenOfSharePoint(client_id);
+
+      const { accessToken, refreshToken, tenantId, clientId, clientSecret } = tokenDoc;
+
+      // // Step 3: Fetch all accessible SharePoint sites
+      const sites = await fetchAllAccessibleSites(accessToken);
+
+      return res.status(200).json({
+        data: sites
+      })
+    } catch (error) {
+      console.error("Error syncing SharePoint Data: ", error.message);
+      return res.status(500).json({
+        error: "Failed to sync SharePoint Data"
+      })
+    }
+  } else if (checkExistOfSharePointConfigResponse === "configuration is already existed") {
+    return res.status(200).json({
+      data: "This SharePoint is already configured."
+    });
+  }
+
+}
+
+exports.sharePointGetAccessToken = async (req, res) => {
+  const { code, state } = req.query;
+  if (!code || !state) {
+    return res.status(400).json({
+      error: "Missing authorization code or state"
+    });
+  }
+
+  const { clientId, clientSecret, tenantId, userId } = JSON.parse(state);
+
+  // Token endpoint
+  const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  // Exchange code for tokens
+  try {
+    const response = await axios.post(tokenEndpoint, new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: "http://localhost:3000/api/v1/sharepoint/callback",
+      grant_type: "authorization_code",
+    }));
+
+    const { access_token, refresh_token } = response.data;
+
+    console.log("Access Token => ", access_token);
+
+    // Save tokens in Elastic Search
+    await saveSharePointTokensToElasticSearch(
+      clientId,
+      clientSecret,
+      tenantId,
+      access_token,
+      refresh_token,
+      userId
+    );
+
+    res.send("Authentication successful! You can sync with your SharePoint now.");
+  } catch (error) {
+    console.error("Error exchanging authorization code:", error.message);
+    res.status(500).json({ error: "Failed to exchange authorization code" });
   }
 }
 

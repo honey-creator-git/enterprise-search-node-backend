@@ -11,9 +11,11 @@ const dataSourceTypeRoutes = require("./routes/v1/datasourcetypeRoutes");
 const googleDriveSyncRoutes = require("./routes/v1/googledrivesyncRoutes");
 const oneDriveSyncRoutes = require("./routes/v1/onedrivesyncRoutes");
 const mysqlsyncRoutes = require("./routes/v1/mysqlsyncRoutes");
+const postgresqlsyncRoutes = require("./routes/v1/postgresqlsyncRoutes");
 const mongodbsyncRoutes = require("./routes/v1/mongodbsyncRoutes");
 const dataSourceRoutes = require("./routes/v1/datasourceRoutes");
 const mssqlRoutes = require("./routes/v1/mssqlsyncRoutes");
+const sharePointOnlineRoutes = require("./routes/v1/sharepointonlineRoutes");
 
 dotenv.config();
 
@@ -50,8 +52,14 @@ app.use("/api/v1/sync-google-drive", googleDriveSyncRoutes);
 // use sync one drive routes
 app.use("/api/v1/sync-one-drive", oneDriveSyncRoutes);
 
+// use sync sharepoint online routes
+app.use("/api/v1/sharepoint", sharePointOnlineRoutes);
+
 // use sync mysql database routes
 app.use("/api/v1/mysql", mysqlsyncRoutes);
+
+// use sync postgresql databse routes
+app.use("/api/v1/postgres", postgresqlsyncRoutes);
 
 // use sync mongodb database routes
 app.use("/api/v1/mongodb", mongodbsyncRoutes);
