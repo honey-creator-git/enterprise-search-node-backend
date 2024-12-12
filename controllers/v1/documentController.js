@@ -2061,9 +2061,10 @@ exports.oneDriveWebhook = async (req, res) => {
       const notifications = value.map(async (notification) => {
 
         if (notification.resource && notification.changeType) {
-          const fileId = notification.resourceData.id;  // The file ID from the notification
+          const graphBaseUrl = "https://graph.microsoft.com/v1.0";
+          // const fileId = notification.resourceData.id;  // The file ID from the notification
           const changeType = notification.changeType; // Get the change type (created, updated, deleted)
-          const userName = notification.resource.split('/')[0];  // Extract userName from the notification (adjust if needed)
+          const userName = notification.resource.split('/')[1];  // Extract userName from the notification (adjust if needed)
 
           console.log(`File changed: ${fileId} with change type: ${changeType}`);
 
@@ -2074,30 +2075,42 @@ exports.oneDriveWebhook = async (req, res) => {
               return res.status(404).send("User credentials not found");
             }
 
-            const { tenant_id, client_id, client_secret, category } = credentials;
+            const { tenant_id, client_id, client_secret, category, coid } = credentials;
             const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
 
-            // Get the file details using the file ID
-            const file = await getFileDetails(fileId, accessToken, userName);
+            const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
 
-            console.log("File details:", file); // Now you have the file metadata
-
-            // Handle the change based on notification
-            if (notification.changeType === 'updated') {
-              const content = await fetchFileContentFromOneDrive(file, accessToken);
-              await pushToAzureSearch([{
-                id: file.id,
-                title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
-                content,
-                category,
-                image: null,
-                description: `File from OneDrive: ${file.name}`
-              }]);
-              console.log(`Processed file: ${file.name}`);
+            const documents = [];
+            for (const file of files) {
+              if (file) {
+                try {
+                  console.log(`Processed file: ${file.name}`);
+                  const content = await fetchFileContentFromOneDrive(file, accessToken);
+                  if (content) {
+                    documents.push({
+                      id: file.id,
+                      title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                      content,
+                      category: category,
+                      image: null,
+                      description: `File from OneDrive: ${file.name}`
+                    })
+                  }
+                } catch (error) {
+                  console.error(`Error processing file: ${file.name}`, error.message);
+                }
+              } else {
+                console.error.log(`Skipping unsupported or folder: ${file.name}`);
+              }
             }
 
-
-            return res.status(200).send("Notification processed");
+            if (documents.length > 0) {
+              await pushToAzureSearch(documents, coid);
+            } else {
+              return res.status(200).json({
+                message: "No valid files to sync."
+              });
+            }
           } catch (error) {
             console.error("Error processing notification:", error.message);
             return res.status(500).send("Failed to process notification");

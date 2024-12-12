@@ -439,6 +439,7 @@ async function getStoredCredentials(userName) {
                     client_id: storedCredentials.clientId,
                     client_secret: storedCredentials.clientSecret,
                     category: storedCredentials.category,
+                    coid: storedCredentials.coid,
                     expirationDateTime: storedCredentials.expirationDateTime, // Include this if needed
                 };
             }
