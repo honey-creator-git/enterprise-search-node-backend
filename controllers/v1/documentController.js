@@ -2651,6 +2651,22 @@ exports.syncDataFromDatasources = async (req, res) => {
         );
         break;
 
+      case "postgresql":
+        dataSourceSyncResponse = await axios.post(
+          "https://es-services.onrender.com/api/v1/postgres",
+          {
+            ...req.body,
+            type: "Postgres"
+          },
+          {
+            headers: {
+              Authorization: req.headers["authorization"],
+              "Content-Type": "application/json"
+            }
+          }
+        );
+        break;
+
       case "nosql":
         dataSourceSyncResponse = await axios.post(
           "https://es-services.onrender.com/api/v1/mongodb",
