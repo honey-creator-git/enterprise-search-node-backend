@@ -246,83 +246,83 @@ async function checkExistOfPostgreSQLConfig(host, database, table_name, coid) {
 }
 
 async function fetchAndProcessFieldContentOfPostgreSQL(config) {
+    const { Client } = require("pg");
     const client = new Client({
         host: config.host,
         user: config.user,
         password: config.password,
         database: config.database,
         ssl: {
-            rejectUnauthorized: true,
+            rejectUnauthorized: false,
         },
     });
 
     try {
         await client.connect();
-        console.log(`Fetching data from table: ${config.table_name}...`);
+        console.log(`Connected to PostgreSQL. Processing table: ${config.table_name}...`);
 
         // Step 1: Check and Create Change Log Table
         const changeLogTable = `${config.table_name}_changelog`;
-        const checkChangeLogTableQuery = `
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = '${changeLogTable}'
-                ) THEN
-                    CREATE TABLE ${changeLogTable} (
-                        log_id SERIAL PRIMARY KEY,
-                        operation_type TEXT NOT NULL, -- INSERT or UPDATE
-                        row_id INT NOT NULL,
-                        changed_field TEXT NOT NULL,
-                        old_value TEXT,
-                        new_value TEXT NOT NULL,
-                        change_time TIMESTAMP DEFAULT NOW()
-                    );
-                END IF;
-            END $$;
+        const createChangeLogTableQuery = `
+            CREATE TABLE IF NOT EXISTS ${changeLogTable} (
+                log_id SERIAL PRIMARY KEY,
+                action_type VARCHAR(50),
+                row_id INT,
+                changed_field VARCHAR(255),
+                old_value TEXT,
+                new_value TEXT,
+                change_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         `;
-        await client.query(checkChangeLogTableQuery);
+        await client.query(createChangeLogTableQuery);
+        console.log(`Change Log Table ensured: ${changeLogTable}`);
 
-        // Step 2: Check and Create Trigger
-        const triggerName = `${config.table_name}_changelog_trigger`;
-        const checkTriggerQuery = `
+        // Step 2: Create Trigger Function
+        const triggerFunctionName = `${config.table_name}_trigger_function`;
+        const createTriggerFunctionQuery = `
+            CREATE OR REPLACE FUNCTION ${triggerFunctionName}()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                IF TG_OP = 'INSERT' THEN
+                    INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, old_value, new_value)
+                    VALUES ('INSERT', NEW.id, '${config.field_name}', NULL, NEW.${config.field_name});
+                ELSIF TG_OP = 'UPDATE' THEN
+                    INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, old_value, new_value)
+                    VALUES ('UPDATE', NEW.id, '${config.field_name}', OLD.${config.field_name}, NEW.${config.field_name});
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        `;
+        await client.query(createTriggerFunctionQuery);
+        console.log(`Trigger Function ensured: ${triggerFunctionName}`);
+
+        // Step 3: Create Trigger
+        const triggerName = `${config.table_name}_trigger`;
+        const createTriggerQuery = `
             DO $$
             BEGIN
                 IF NOT EXISTS (
-                    SELECT FROM pg_trigger 
-                    WHERE tgname = '${triggerName}'
+                    SELECT 1 FROM pg_trigger WHERE tgname = '${triggerName}'
                 ) THEN
-                    CREATE OR REPLACE FUNCTION log_changes_to_${changeLogTable}()
-                    RETURNS TRIGGER AS $$
-                    BEGIN
-                        IF (TG_OP = 'INSERT') THEN
-                            INSERT INTO ${changeLogTable} (operation_type, row_id, changed_field, new_value)
-                            VALUES ('INSERT', NEW.id, '${config.field_name}', NEW.${config.field_name});
-                        ELSIF (TG_OP = 'UPDATE') THEN
-                            INSERT INTO ${changeLogTable} (operation_type, row_id, changed_field, old_value, new_value)
-                            VALUES ('UPDATE', NEW.id, '${config.field_name}', OLD.${config.field_name}, NEW.${config.field_name});
-                        END IF;
-                        RETURN NEW;
-                    END;
-                    $$ LANGUAGE plpgsql;
-
                     CREATE TRIGGER ${triggerName}
                     AFTER INSERT OR UPDATE ON ${config.table_name}
                     FOR EACH ROW
-                    EXECUTE FUNCTION log_changes_to_${changeLogTable}();
+                    EXECUTE FUNCTION ${triggerFunctionName}();
                 END IF;
             END $$;
         `;
-        await client.query(checkTriggerQuery);
+        await client.query(createTriggerQuery);
+        console.log(`Trigger ensured: ${triggerName}`);
 
-        // Step 3: Fetch Data from the Table
-        const fetchQuery = `
+        // Step 4: Fetch Data from the Table
+        const query = `
             SELECT id, ${config.field_name} AS field_value
             FROM ${config.table_name}
             WHERE id > $1
             ORDER BY id ASC
         `;
-        const res = await client.query(fetchQuery, [config.lastProcessedId || 0]);
+        const res = await client.query(query, [config.lastProcessedId || 0]);
 
         if (res.rows.length === 0) {
             console.log("No new rows found in the table.");
@@ -335,7 +335,6 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         console.log(`Fetched ${res.rows.length} new rows from the table.`);
         const documents = [];
 
-        // Step 4: Process Data
         for (const row of res.rows) {
             let processedContent;
 
@@ -347,7 +346,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
                     config.xml_paths
                 );
             } catch (error) {
-                console.error(`Failed to process content for row ID ${row.id}:`, error.message);
+                console.error(`Failed to process content for row ID ${row.id}`, error.message);
                 continue;
             }
 
@@ -374,6 +373,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         await client.end();
     }
 }
+
 
 async function registerPostgreSQLConnection(config) {
     try {

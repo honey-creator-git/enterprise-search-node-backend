@@ -2248,8 +2248,7 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
     });
   }
 
-  // const checkExistOfPostgreSQLConfigResponse = await checkExistOfPostgreSQLConfig(db_host, db_database, table_name, req.coid);
-  const checkExistOfPostgreSQLConfigResponse = "PostgreSQL configuration is not existed";
+  const checkExistOfPostgreSQLConfigResponse = await checkExistOfPostgreSQLConfig(db_host, db_database, table_name, req.coid);
 
   if (checkExistOfPostgreSQLConfigResponse === "PostgreSQL configuration is not existed") {
     const esNewCategoryResponse = await axios.post(
