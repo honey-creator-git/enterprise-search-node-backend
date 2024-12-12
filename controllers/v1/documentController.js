@@ -2084,8 +2084,8 @@ exports.oneDriveWebhook = async (req, res) => {
             for (const file of files) {
               if (file) {
                 try {
-                  console.log(`Processed file: ${file.name}`);
                   const content = await fetchFileContentFromOneDrive(file, accessToken);
+                  console.log(`Processed file: ${file.name} => ${content}`);
                   if (content) {
                     documents.push({
                       id: file.id,
