@@ -2066,7 +2066,7 @@ exports.oneDriveWebhook = async (req, res) => {
           const changeType = notification.changeType; // Get the change type (created, updated, deleted)
           const userName = notification.resource.split('/')[1];  // Extract userName from the notification (adjust if needed)
 
-          console.log(`File changed: ${fileId} with change type: ${changeType}`);
+          console.log(`File changed with change type: ${changeType}`);
 
           try {
             const credentials = await getStoredCredentials(userName);  // Retrieve stored credentials from DB
