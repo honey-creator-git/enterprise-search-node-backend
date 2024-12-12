@@ -252,33 +252,90 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         password: config.password,
         database: config.database,
         ssl: {
-            rejectUnauthorized: true
-        }
+            rejectUnauthorized: true,
+        },
     });
 
     try {
         await client.connect();
         console.log(`Fetching data from table: ${config.table_name}...`);
 
-        const query = `
+        // Step 1: Check and Create Change Log Table
+        const changeLogTable = `${config.table_name}_changelog`;
+        const checkChangeLogTableQuery = `
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = '${changeLogTable}'
+                ) THEN
+                    CREATE TABLE ${changeLogTable} (
+                        log_id SERIAL PRIMARY KEY,
+                        operation_type TEXT NOT NULL, -- INSERT or UPDATE
+                        row_id INT NOT NULL,
+                        changed_field TEXT NOT NULL,
+                        old_value TEXT,
+                        new_value TEXT NOT NULL,
+                        change_time TIMESTAMP DEFAULT NOW()
+                    );
+                END IF;
+            END $$;
+        `;
+        await client.query(checkChangeLogTableQuery);
+
+        // Step 2: Check and Create Trigger
+        const triggerName = `${config.table_name}_changelog_trigger`;
+        const checkTriggerQuery = `
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT FROM pg_trigger 
+                    WHERE tgname = '${triggerName}'
+                ) THEN
+                    CREATE OR REPLACE FUNCTION log_changes_to_${changeLogTable}()
+                    RETURNS TRIGGER AS $$
+                    BEGIN
+                        IF (TG_OP = 'INSERT') THEN
+                            INSERT INTO ${changeLogTable} (operation_type, row_id, changed_field, new_value)
+                            VALUES ('INSERT', NEW.id, '${config.field_name}', NEW.${config.field_name});
+                        ELSIF (TG_OP = 'UPDATE') THEN
+                            INSERT INTO ${changeLogTable} (operation_type, row_id, changed_field, old_value, new_value)
+                            VALUES ('UPDATE', NEW.id, '${config.field_name}', OLD.${config.field_name}, NEW.${config.field_name});
+                        END IF;
+                        RETURN NEW;
+                    END;
+                    $$ LANGUAGE plpgsql;
+
+                    CREATE TRIGGER ${triggerName}
+                    AFTER INSERT OR UPDATE ON ${config.table_name}
+                    FOR EACH ROW
+                    EXECUTE FUNCTION log_changes_to_${changeLogTable}();
+                END IF;
+            END $$;
+        `;
+        await client.query(checkTriggerQuery);
+
+        // Step 3: Fetch Data from the Table
+        const fetchQuery = `
             SELECT id, ${config.field_name} AS field_value
             FROM ${config.table_name}
             WHERE id > $1
             ORDER BY id ASC
         `;
-        const res = await client.query(query, [config.lastProcessedId || 0]);
+        const res = await client.query(fetchQuery, [config.lastProcessedId || 0]);
 
         if (res.rows.length === 0) {
             console.log("No new rows found in the table.");
             return {
                 data: [],
-                lastProcessedId: config.lastProcessedId || 0
-            }
+                lastProcessedId: config.lastProcessedId || 0,
+            };
         }
 
         console.log(`Fetched ${res.rows.length} new rows from the table.`);
         const documents = [];
 
+        // Step 4: Process Data
         for (const row of res.rows) {
             let processedContent;
 
@@ -287,10 +344,10 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
                     row.field_value,
                     config.field_type,
                     config.json_properties,
-                    config.xml_paths,
+                    config.xml_paths
                 );
             } catch (error) {
-                console.error(`Failed to process content for row ID ${row.id}`, error.message);
+                console.error(`Failed to process content for row ID ${row.id}:`, error.message);
                 continue;
             }
 
@@ -309,7 +366,10 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         const lastProcessedId = res.rows[res.rows.length - 1].id;
         console.log(`Last Processed ID: ${lastProcessedId}`);
 
-        return { data: documents, lastProcessedId }
+        return { data: documents, lastProcessedId };
+    } catch (error) {
+        console.error("Error during PostgreSQL Sync:", error.message);
+        throw new Error("Failed to fetch and process field content");
     } finally {
         await client.end();
     }
