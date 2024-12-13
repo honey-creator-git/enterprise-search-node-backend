@@ -1947,13 +1947,13 @@ exports.syncOneDrive = async (req, res) => {
     tenant_id,
     client_id,
     client_secret,
-    datasourceName,
-    datasourceType,
+    name,
+    type,
     userName,
   } = req.body;
 
   if (
-    !tenant_id || !client_id || !client_secret || !datasourceName || !datasourceType
+    !tenant_id || !client_id || !client_secret || !name || !type
   ) {
     return res.status(400).json({
       error: "Missing required parameters"
@@ -1980,8 +1980,8 @@ exports.syncOneDrive = async (req, res) => {
       const esNewCategoryResponse = await axios.post(
         "https://es-services.onrender.com/api/v1/category",
         {
-          name: datasourceName,
-          type: datasourceType,
+          name: name,
+          type: type,
         },
         {
           headers: {
@@ -2504,11 +2504,11 @@ exports.syncSharePointOnlineDatabase = async (req, res) => {
     tenant_id,
     client_id,
     client_secret,
-    datasourceName,
-    datasourceType,
+    name,
+    type,
   } = req.body;
 
-  if (!tenant_id || !client_id || !client_secret || !datasourceName || !datasourceType) {
+  if (!tenant_id || !client_id || !client_secret || !name || !type) {
     return res.status(400).json({ error: "Missing required parameters" });
   }
 
@@ -2622,7 +2622,7 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/sync-one-drive",
           {
             ...req.body,
-            datasourceType: "OneDrive"
+            type: "OneDrive"
           },
           {
             headers: {
