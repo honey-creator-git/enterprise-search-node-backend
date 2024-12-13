@@ -558,6 +558,32 @@ exports.deleteCategory = async (req, res) => {
         },
       });
       console.log(`Deleted related NoSQL Database document(s) from index ${nosqlIndex}`);
+    } else if (type === "Postgres") {
+      const postgresqlIndex = `datasource_postgresql_connection_${req.coid.toLowerCase()}`;
+      await client.deleteByQuery({
+        index: postgresqlIndex,
+        body: {
+          query: {
+            match: {
+              category: categoryId,
+            },
+          },
+        },
+      });
+      console.log(`Deleted related PostgreSQL Database document(s) from index ${postgresqlIndex}`);
+    } else if (type === "MSSQL") {
+      const mssqlsqlIndex = `datasource_mssql_connection_${req.coid.toLowerCase()}`;
+      await client.deleteByQuery({
+        index: mssqlsqlIndex,
+        body: {
+          query: {
+            match: {
+              category: categoryId,
+            },
+          },
+        },
+      });
+      console.log(`Deleted related MSSQL Database document(s) from index ${mssqlsqlIndex}`);
     } else {
       console.log(`No additional deletion logic defined for type: ${type}`);
     }
