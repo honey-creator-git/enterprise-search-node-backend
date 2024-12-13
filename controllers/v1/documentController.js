@@ -1993,55 +1993,54 @@ exports.syncOneDrive = async (req, res) => {
 
       const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
 
-      // Save the OneDrive connection with expirationDateTime
-      await registerOneDriveConnection({
-        tenant_id: tenant_id,
-        client_id: client_id,
-        client_secret: client_secret,
-        userName: userName,
-        category: newCategoryId,
-        coid: req.coid,
-        expirationDateTime: expirationDateTime
+      // Immediately return the response
+      res.status(200).json({
+        message: "Sync request received. Processing in background.",
+        categoryId: newCategoryId,
       });
 
-      const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
+      // Continue processing in the background asynchronously using setImmediate
+      setImmediate(async () => {
+        // Save the OneDrive connection with expirationDateTime
+        await registerOneDriveConnection({
+          tenant_id: tenant_id,
+          client_id: client_id,
+          client_secret: client_secret,
+          userName: userName,
+          category: newCategoryId,
+          coid: req.coid,
+          expirationDateTime: expirationDateTime
+        });
 
-      const documents = [];
-      for (const file of files) {
-        if (file) {
-          try {
-            const content = await fetchFileContentFromOneDrive(file, accessToken);
-            if (content) {
-              documents.push({
-                id: file.id,
-                title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
-                content,
-                category: newCategoryId,
-                image: null,
-                description: `File from OneDrive: ${file.name}`
-              })
+        const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
+
+        const documents = [];
+        for (const file of files) {
+          if (file) {
+            try {
+              const content = await fetchFileContentFromOneDrive(file, accessToken);
+              if (content) {
+                documents.push({
+                  id: file.id,
+                  title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                  content,
+                  category: newCategoryId,
+                  image: null,
+                  description: `File from OneDrive: ${file.name}`
+                })
+              }
+            } catch (error) {
+              console.error(`Error processing file: ${file.name}`, error.message);
             }
-          } catch (error) {
-            console.error(`Error processing file: ${file.name}`, error.message);
+          } else {
+            console.error.log(`Skipping unsupported or folder: ${file.name}`);
           }
-        } else {
-          console.error.log(`Skipping unsupported or folder: ${file.name}`);
         }
-      }
 
-      if (documents.length > 0) {
-        const azureResponse = await pushToAzureSearch(documents, req.coid);
-        return res.status(200).json({
-          message: "Sync successful",
-          count: documents.length,
-          uploaded: documents,
-          azureResponse
-        });
-      } else {
-        return res.status(200).json({
-          message: "No valid files to sync."
-        });
-      }
+        if (documents.length > 0) {
+          const azureResponse = await pushToAzureSearch(documents, req.coid);
+        }
+      })
     } catch (error) {
       console.error("Error syncing OneDrive data: ", error.message);
       return res.status(500).json({
