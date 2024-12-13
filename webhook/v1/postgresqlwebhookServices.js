@@ -1,5 +1,4 @@
 const client = require("./../../config/elasticsearch");
-const { Client } = require("pg");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
