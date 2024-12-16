@@ -901,7 +901,7 @@ exports.getUserCategories = async (req, res) => {
   const userId = req.query.userId; // User ID from the request parameters
 
   try {
-    // Search in the "category-user" index for documents that include the userId in the "user" field
+    // Step 1: Search for categories in "category_user_{coid}" index
     const categoryResponse = await client.search({
       index: `category_user_${req.coid.toLowerCase()}`,
       body: {
@@ -916,10 +916,29 @@ exports.getUserCategories = async (req, res) => {
       hit._source.categories.split(",").map((category) => category.trim())
     );
 
-    // Return the unique categories associated with the user
+    // Remove duplicates
+    const uniqueCategories = [...new Set(userCategories)];
+
+    // Step 2: Validate the categories in the "datasource_{coid}" index
+    const datasourceResponse = await client.search({
+      index: `datasources_${req.coid.toLowerCase()}`,
+      body: {
+        query: {
+          terms: {
+            _id: uniqueCategories, // Check if the IDs exist in the "datasource" index
+          },
+        },
+        _source: false, // We only care about matching IDs
+      },
+    });
+
+    // Extract valid data source IDs (categories) that exist in the datasource index
+    const validDataSourceIds = datasourceResponse.hits.hits.map((hit) => hit._id);
+
+    // Step 3: Return the filtered categories (only valid data source IDs)
     res.status(200).json({
       message: `Categories for user ${userId} retrieved successfully`,
-      categories: [...new Set(userCategories)], // Remove duplicates if any
+      categories: validDataSourceIds,
     });
   } catch (error) {
     console.error("Error retrieving user categories: ", error);
@@ -2029,7 +2048,8 @@ exports.syncOneDrive = async (req, res) => {
               if (content) {
                 documents.push({
                   id: file.id,
-                  title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                  // title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                  title: file.name,
                   content,
                   category: newCategoryId,
                   image: null,
@@ -2105,7 +2125,8 @@ exports.oneDriveWebhook = async (req, res) => {
                   if (content) {
                     documents.push({
                       id: file.id,
-                      title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                      // title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
+                      title: file.name,
                       content,
                       category: category,
                       image: null,

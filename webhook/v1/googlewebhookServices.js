@@ -4,6 +4,7 @@ const cheerio = require("cheerio");
 const xlsx = require("xlsx");
 const mammoth = require("mammoth");
 const pdf = require("pdf-parse");
+const pptParser = require('ppt-parser');
 const axios = require("axios");
 
 async function checkExistOfGoogleDriveConfig(client_id, coid) {
@@ -268,11 +269,18 @@ async function fetchGoogleSheetContent(fileId, drive) {
 async function fetchFileContentByType(file, drive) {
   if (file.mimeType === "text/plain") {
     return await fetchFileContent(file.id, drive);
+  } else if (file.mimeType === "application/json") {
+    return await fetchJSONContent(file.id, drive);
   } else if (file.mimeType === "application/pdf") {
     return await fetchPdfContent(file.id, drive);
+  } else if (file.mimeType === "text/csv") {
+    return await fetchCsvContent(file.id, drive);
+  } else if (file.mimeType === "application/xml" || file.mimeType === "text/xml") {
+    return await fetchXmlContent(file.id, drive);
   } else if (
     file.mimeType ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    file.mimeType === "application/msword"
   ) {
     return await fetchWordContent(file.id, drive);
   } else if (
@@ -282,6 +290,10 @@ async function fetchFileContentByType(file, drive) {
     return await fetchExcelContent(file.id, drive);
   } else if (file.mimeType === "application/vnd.google-apps.spreadsheet") {
     return await fetchGoogleSheetContent(file.id, drive); // Google Sheets
+  } else if (file.mimeType === "application/rtf") {
+    return await fetchRtfContent(file.id, drive);
+  } else if (file.mimeType === "application/vnd.ms-powerpoint" || file.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+    return await fetchPptContent(file.id, drive);
   } else if (file.mimeType === "text/html") {
     return await fetchHtmlContent(file.id, drive);
   } else if (file.mimeType === "application/vnd.google-apps.document") {
@@ -299,6 +311,38 @@ async function fetchFileContent(fileId, drive) {
   return response.data;
 }
 
+async function fetchJSONContent(fileId, drive) {
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "json" }
+  );
+  return JSON.stringify(response.data, null, 2); // Pretty print JSON
+}
+
+async function fetchCsvContent(fileId, drive) {
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "text" }
+  );
+  return response.data; // Raw CSV content as text
+}
+
+async function fetchRtfContent(fileId, drive) {
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "text" }
+  );
+  return response.data; // Raw RTF content
+}
+
+async function fetchXmlContent(fileId, drive) {
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "text" }
+  );
+  return response.data; // Raw XML content as text
+}
+
 // Fetch specific file types
 async function fetchPdfContent(fileId, drive) {
   const response = await drive.files.get(
@@ -307,6 +351,20 @@ async function fetchPdfContent(fileId, drive) {
   );
   const pdfData = await pdf(response.data);
   return pdfData.text;
+}
+
+async function fetchPptContent(fileId, drive) {
+  const response = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" } // Fetch the file as an ArrayBuffer
+  );
+
+  // Parse the PPT content using ppt-parser
+  const buffer = Buffer.from(response.data); // Convert ArrayBuffer to Buffer
+  const pptContent = await pptParser.parse(buffer); // Parse PPT/PPTX content
+
+  // You can process or return the extracted content
+  return pptContent; // Returns extracted text and slides data
 }
 
 async function fetchWordContent(fileId, drive) {
