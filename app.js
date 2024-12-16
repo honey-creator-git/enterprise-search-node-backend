@@ -16,6 +16,7 @@ const mongodbsyncRoutes = require("./routes/v1/mongodbsyncRoutes");
 const dataSourceRoutes = require("./routes/v1/datasourceRoutes");
 const mssqlRoutes = require("./routes/v1/mssqlsyncRoutes");
 const sharePointOnlineRoutes = require("./routes/v1/sharepointonlineRoutes");
+const wasabiRoutes = require("./routes/v1/wasabiRoutes");
 
 dotenv.config();
 
@@ -66,6 +67,9 @@ app.use("/api/v1/mongodb", mongodbsyncRoutes);
 
 // use sync mssql database routes
 app.use("/api/v1/mssql", mssqlRoutes);
+
+// use sync wasabi routes
+app.use("/api/v1/wasabi", wasabiRoutes);
 
 // use sync data source routes
 app.use("/api/v1/", dataSourceRoutes);

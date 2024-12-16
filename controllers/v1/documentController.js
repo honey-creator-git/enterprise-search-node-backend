@@ -6,6 +6,7 @@ const {
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
 const WebSocket = require("ws");
+const { S3Client, GetObjectCommand, ListObjectsV2Command, HeadBucketCommand } = require('@aws-sdk/client-s3');
 const { google } = require("googleapis");
 const {
   saveWebhookDetails,
@@ -53,6 +54,12 @@ const {
   saveMSSQLConnection,
   fetchAndProcessFieldContent
 } = require("../../webhook/v1/mssqlwebhookServices");
+const {
+  checkBucketExists,
+  getFileFromBucket,
+  listFilesInBucket,
+  processFileContent
+} = require("../../webhook/v1/wasabiwebhookServices");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -2586,6 +2593,97 @@ exports.sharePointGetAccessToken = async (req, res) => {
   } catch (error) {
     console.error("Error exchanging authorization code:", error.message);
     res.status(500).json({ error: "Failed to exchange authorization code" });
+  }
+}
+
+exports.syncWasabi = async (req, res) => {
+  const {
+    bucket_name,
+    folder_path,
+    access_key_id,
+    secret_access_key
+  } = req.body;
+
+  // Initialize S3 client for Wasabi
+  const s3Client = new S3Client({
+    endpoint: "https://s3.us-west-1.wasabisys.com", // Replace with your Wasabi endpoint
+    region: "us-west-1", // Replace with your region
+    credentials: {
+      accessKeyId: access_key_id, // Replace with your Wasabi Access Key
+      secretAccessKey: secret_access_key, // Replace with your Wasabi Secret Key
+    },
+  });
+
+  const params = {
+    Bucket: bucket_name,
+    Prefix: folder_path, // Folder path in the bucket
+  };
+
+  const command = new ListObjectsV2Command(params);
+
+  const bucketCommand = new HeadBucketCommand({
+    Bucket: bucket_name
+  })
+
+  try {
+    // Check if the bucket exists
+    const bucketExists = await checkBucketExists(s3Client, bucketCommand);
+    if (!bucketExists) {
+      return res.status(404).json({
+        success: false,
+        message: "The specified bucket does not exist",
+      });
+    }
+
+    // List files
+    const files = await listFilesInBucket(s3Client, command);
+
+    console.log("Files in bucket:", files);
+
+    const extractedDocuments = [];
+
+    for (const file of files) {
+      console.log(`Fetching content for file: ${file.Key}`);
+      const params = {
+        Bucket: bucket_name,
+        Key: file.Key, // File path in the bucket
+      };
+      const getCommand = new GetObjectCommand(params);
+      const fileBuffer = await getFileFromBucket(s3Client, getCommand);
+
+      const content = await processFileContent(file.Key, fileBuffer);
+
+      if (content) {
+        console.log(`Extracted content from ${file.Key}:\n`, content);
+        extractedDocuments.push({
+          fileName: file.Key,
+          content,
+        });
+      } else {
+        console.log(`No content extracted for ${file.Key}`);
+      }
+    }
+
+    // Return the extracted content as a response
+    return res.status(200).json({
+      success: true,
+      message: "Documents retrieved successfully",
+      count: extractedDocuments.length,
+      data: extractedDocuments,
+    });
+  } catch (error) {
+    if (error.message === "No specified bucket/folder path") {
+      return res.status(404).json({
+        success: false,
+        message: "No specified bucket/folder path found",
+      });
+    }
+
+    console.error("Error syncing Wasabi data:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to sync Wasabi data",
+    });
   }
 }
 
