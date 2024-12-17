@@ -871,9 +871,13 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         search: query, // The search query
         filter: filter, // Add filter query here
         searchMode: "any", // Allows matching on any term within the query
-        queryType: "simple", // Enables full query parsing for complex queries
+        queryType: "semantic", // Enables semantic search
+        semanticConfiguration: "es-semantic-config", // Name of the semantic configuration
         top: 30, // Number of results to return
         count: true, // Return count of results
+        queryLanguage: "en-us", // Specify the language for semantic search
+        answers: "extractive|count-3", // Enables extractive answers with top 3 answers
+        captions: "extractive|highlight-false", // Returns extractive captions for results without highlighting
       },
       {
         headers: {
@@ -1113,7 +1117,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     const checkIndexUrl = `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${tenantIndexName}?api-version=2023-07-01-Preview`;
     const createIndexUrl = `${process.env.AZURE_SEARCH_ENDPOINT}/indexes?api-version=2023-07-01-Preview`;
 
-    // Step 1: Check if the index already exists
     let indexExists = false;
 
     try {
@@ -1137,7 +1140,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       }
     }
 
-    // Step 2: Create the index if it does not exist
     if (!indexExists) {
       try {
         const indexSchema = {
@@ -1198,8 +1200,6 @@ exports.decodeUserTokenAndSave = async (req, res) => {
         },
       },
     });
-
-    console.log(`Index '${tenantIndexName}' created successfully.`);
 
     // Extract categories from response
     const categories = response.hits.hits.map((hit) => ({
