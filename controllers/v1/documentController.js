@@ -1108,54 +1108,38 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       categoryIndexName,
       categoryUserIndexMapping
     );
-    // Define Azure AI Search index schema
-    let azureFields = [
-      { name: "id", type: "Edm.String", key: true, searchable: false },
-    ];
 
-    const tempAzureFields = [
-      {
-        name: "title",
-        type: "Edm.String",
-        searchable: true,
-        filterable: true,
-        sortable: true,
-      },
-      {
-        name: "content",
-        type: "Edm.String",
-        searchable: true,
-        filterable: true,
-        sortable: true,
-      },
-      {
-        name: "description",
-        type: "Edm.String",
-        searchable: true,
-        filterable: true,
-        sortable: true,
-      },
-      {
-        name: "image",
-        type: "Edm.String",
-        searchable: true,
-        filterable: true,
-        sortable: true,
-      },
-      {
-        name: "category",
-        type: "Edm.String",
-        searchable: true,
-        filterable: true,
-        sortable: true,
-      },
-    ];
+    // Azure API URLs
+    const checkIndexUrl = `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${tenantIndexName}?api-version=2023-07-01-Preview`;
+    const createIndexUrl = `${process.env.AZURE_SEARCH_ENDPOINT}/indexes?api-version=2023-07-01-Preview`;
 
-    azureFields = azureFields.concat(tempAzureFields);
+    // Step 1: Check if the index already exists
+    try {
+      await axios.get(checkIndexUrl, {
+        headers: {
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        // If it's not a 404 error, throw the error
+        throw error;
+      }
+      console.log(`Index '${tenantIndexName}' does not exist. Proceeding to create it.`);
+    }
 
-    const azureIndexSchema = {
+    // Step 2: Define the Azure Search index schema
+    const indexSchema = {
       name: tenantIndexName,
-      fields: azureFields,
+      fields: [
+        { name: "id", type: "Edm.String", key: true, searchable: false },
+        { name: "title", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+        { name: "content", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+        { name: "description", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+        { name: "image", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+        { name: "category", type: "Edm.String", searchable: true, filterable: true, sortable: true }
+      ],
       suggesters: [
         {
           name: "sg",
@@ -1165,12 +1149,12 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       semantic: {
         configurations: [
           {
-            name: "es-semantic-config",
+            name: "default-semantic-config",
             prioritizedFields: {
               titleField: { fieldName: "title" },
               prioritizedContentFields: [
                 { fieldName: "content" },
-                { fieldName: "description" },
+                { fieldName: "description" }
               ],
             },
           },
@@ -1178,30 +1162,13 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     };
 
-    // Initialize Azure Cognitive Search client
-    const searchClientForTenant = new SearchIndexClient(
-      process.env.AZURE_SEARCH_ENDPOINT,
-      new AzureKeyCredential(process.env.AZURE_SEARCH_API_KEY)
-    );
-
-    // Check if the tenant index exists in Azure Cognitive Search
-    let azureResponse;
-    try {
-      await searchClientForTenant.getIndex(tenantIndexName);
-    } catch (error) {
-      if (error.statusCode === 404) {
-        console.log(
-          `Azure index ${tenantIndexName} does not exist. Creating...`
-        );
-        azureResponse = await searchClientForTenant.createIndex(
-          azureIndexSchema
-        );
-        console.log(`Azure index ${tenantIndexName} created successfully.`);
-      } else {
-        console.error("Azure Cognitive Search error:", error);
-        throw error;
-      }
-    }
+    // Step 3: Create the index
+    const azureResponse = await axios.post(createIndexUrl, indexSchema, {
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": process.env.AZURE_SEARCH_API_KEY,
+      },
+    });
 
     // Search for categories with the specified tenantId in Elasticsearch
     const response = await client.search({
@@ -1214,6 +1181,8 @@ exports.decodeUserTokenAndSave = async (req, res) => {
         },
       },
     });
+
+    console.log(`Index '${tenantIndexName}' created successfully.`);
 
     // Extract categories from response
     const categories = response.hits.hits.map((hit) => ({
