@@ -1149,7 +1149,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       semantic: {
         configurations: [
           {
-            name: "default-semantic-config",
+            name: "es-semantic-config",
             prioritizedFields: {
               titleField: { fieldName: "title" },
               prioritizedContentFields: [
@@ -1315,8 +1315,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
     res.status(201).json({
       message: `User information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
-      elasticsearchResponse: esResponse,
-      azureResponse: azureResponse,
+      elasticsearchResponse: esResponse
     });
   } catch (error) {
     console.error("Error saving user:", error);
