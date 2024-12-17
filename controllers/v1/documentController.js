@@ -1062,7 +1062,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   let isNewUser = false;
 
   try {
-    // Define mappings for Elasticsearch indices
+    // Define Elasticsearch index mappings
     const usersIndexMapping = {
       mappings: {
         properties: {
@@ -1159,34 +1159,23 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       suggesters: [
         {
           name: "sg",
-          sourceFields: tempAzureFields
-            .filter((f) => f.searchable)
-            .map((f) => f.name),
+          sourceFields: ["title", "content", "description"],
         },
       ],
-      corsOptions: {
-        allowedOrigins: ["*"],
-        allowedHeaders: ["*"],
-        exposedHeaders: ["*"],
-        allowedMethods: ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
-      },
       semantic: {
         configurations: [
           {
             name: "es-semantic-config",
             prioritizedFields: {
-              titleField: { fieldName: tempAzureFields[0].name },
-              prioritizedContentFields: tempAzureFields.map((field) => ({
-                fieldName: field.name,
-              })),
+              titleField: { fieldName: "title" },
+              prioritizedContentFields: [
+                { fieldName: "content" },
+                { fieldName: "description" },
+              ],
             },
           },
         ],
       },
-      scoringProfiles: [],
-      analyzers: [],
-      tokenFilters: [],
-      charFilters: [],
     };
 
     // Initialize Azure Cognitive Search client
@@ -1487,6 +1476,80 @@ exports.getAllUsersFromTenant = async (req, res) => {
     });
   }
 };
+
+exports.deleteUserFromTenant = async (req, res) => {
+  const coid = req.coid.toLowerCase(); // Tenant company ID
+  const userId = req.params.userId; // User ID passed in the URL
+
+  const usersIndexName = `users_${coid}`;
+  const categoryUserIndexName = `category_user_${coid}`;
+
+  try {
+    // Step 1: Fetch the user document from the users index
+    const userSearchResponse = await client.search({
+      index: usersIndexName,
+      body: {
+        query: {
+          match: { _id: userId }
+        }
+      }
+    });
+
+    if (userSearchResponse.hits.total.value === 0) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Extract the 'uoid' field from the user document
+    const userDocument = userSearchResponse.hits.hits[0];
+    const uoid = userDocument._source.uoid;
+
+    console.log(`Found user with uoid: ${uoid}`);
+
+    // Step 2: Delete the appropriate document from category_user index
+    const categoryUserSearchResponse = await client.search({
+      index: categoryUserIndexName,
+      body: {
+        query: {
+          match: { user: uoid },
+        },
+      },
+    });
+
+    if (categoryUserSearchResponse.hits.total.value > 0) {
+      const categoryDocumentId = categoryUserSearchResponse.hits.hits[0]._id;
+
+      await client.delete({
+        index: categoryUserIndexName,
+        id: categoryDocumentId,
+      });
+
+      console.log(
+        `Deleted document from ${categoryUserIndexName} with ID: ${categoryDocumentId}`
+      );
+    } else {
+      console.log(`No document found in ${categoryUserIndexName} for user: ${uoid}`);
+    }
+
+    // Step 3: Delete the user document from the users index
+    await client.delete({
+      index: usersIndexName,
+      id: userId,
+    });
+
+    console.log(`Deleted user from ${usersIndexName} with ID: ${userId}`);
+
+    // Step 4: Return success response
+    res.status(200).json({
+      message: "User and associated category data deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({
+      error: "Failed to delete user",
+      details: error.message,
+    });
+  }
+}
 
 exports.getDocumentsWithCategoryId = async (req, res) => {
   const indexName = ("tenant_" + req.coid).toLowerCase();

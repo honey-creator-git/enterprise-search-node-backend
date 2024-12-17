@@ -19,4 +19,6 @@ router.get(
   documentController.getAllUsersFromTenant
 );
 
+router.delete("/:userId", setRoleMiddleware, checkAdminAccess, documentController.deleteUserFromTenant)
+
 module.exports = router;
