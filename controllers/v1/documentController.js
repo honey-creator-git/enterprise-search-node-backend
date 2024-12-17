@@ -1114,61 +1114,78 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     const createIndexUrl = `${process.env.AZURE_SEARCH_ENDPOINT}/indexes?api-version=2023-07-01-Preview`;
 
     // Step 1: Check if the index already exists
+    let indexExists = false;
+
     try {
-      await axios.get(checkIndexUrl, {
+      const response = await axios.get(checkIndexUrl, {
         headers: {
           "api-key": process.env.AZURE_SEARCH_API_KEY,
           "Content-Type": "application/json",
         },
       });
-    } catch (error) {
-      if (error.response?.status !== 404) {
-        // If it's not a 404 error, throw the error
-        throw error;
+
+      if (response.status === 200) {
+        indexExists = true; // Index exists
+        console.log(`Index '${tenantIndexName}' already exists.`);
       }
-      console.log(`Index '${tenantIndexName}' does not exist. Proceeding to create it.`);
+    } catch (error) {
+      if (error.response?.status === 404) {
+        console.log(`Index '${tenantIndexName}' does not exist. Proceeding to create it.`);
+      } else {
+        console.error(`Error checking index existence: ${error.response?.data || error.message}`);
+        throw error; // Re-throw non-404 errors
+      }
     }
 
-    // Step 2: Define the Azure Search index schema
-    const indexSchema = {
-      name: tenantIndexName,
-      fields: [
-        { name: "id", type: "Edm.String", key: true, searchable: false },
-        { name: "title", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-        { name: "content", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-        { name: "description", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-        { name: "image", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-        { name: "category", type: "Edm.String", searchable: true, filterable: true, sortable: true }
-      ],
-      suggesters: [
-        {
-          name: "sg",
-          sourceFields: ["title", "content", "description"],
-        },
-      ],
-      semantic: {
-        configurations: [
-          {
-            name: "es-semantic-config",
-            prioritizedFields: {
-              titleField: { fieldName: "title" },
-              prioritizedContentFields: [
-                { fieldName: "content" },
-                { fieldName: "description" }
-              ],
+    // Step 2: Create the index if it does not exist
+    if (!indexExists) {
+      try {
+        const indexSchema = {
+          name: tenantIndexName,
+          fields: [
+            { name: "id", type: "Edm.String", key: true, searchable: false },
+            { name: "title", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+            { name: "content", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+            { name: "description", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+            { name: "image", type: "Edm.String", searchable: true, filterable: true, sortable: true },
+            { name: "category", type: "Edm.String", searchable: true, filterable: true, sortable: true }
+          ],
+          suggesters: [
+            {
+              name: "sg",
+              sourceFields: ["title", "content", "description"],
             },
+          ],
+          semantic: {
+            configurations: [
+              {
+                name: "es-semantic-config",
+                prioritizedFields: {
+                  titleField: { fieldName: "title" },
+                  prioritizedContentFields: [
+                    { fieldName: "content" },
+                    { fieldName: "description" }
+                  ],
+                },
+              },
+            ],
           },
-        ],
-      },
-    };
+        };
 
-    // Step 3: Create the index
-    const azureResponse = await axios.post(createIndexUrl, indexSchema, {
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": process.env.AZURE_SEARCH_API_KEY,
-      },
-    });
+        // Step 3: Create the index
+        await axios.post(createIndexUrl, indexSchema, {
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": process.env.AZURE_SEARCH_API_KEY,
+          },
+        });
+      } catch (creationError) {
+        console.error(`Failed to create index: ${creationError.response?.data || creationError.message}`);
+        throw creationError; // Handle index creation errors
+      }
+    } else {
+      console.log(`Skipping index creation as '${tenantIndexName}' already exists.`);
+    }
 
     // Search for categories with the specified tenantId in Elasticsearch
     const response = await client.search({
