@@ -813,10 +813,9 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
 
     // Fetch all documents using paged requests
     let allDocuments = [];
+    let allAnswers = []; // Array to store all @search.answers
     let searchAfter = null;
     const pageSize = 50;
-
-    let searchAnswers = null; // Variable to store @search.answers
 
     while (true) {
       const requestBody = {
@@ -826,7 +825,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         queryType: "semantic",
         semanticConfiguration: "es-semantic-config",
         queryLanguage: "en-us",
-        answers: "extractive", // Enable extractive answers (top 3 answers)
+        answers: "extractive|count-3", // Enable extractive answers (top 3 answers)
         captions: "extractive",
         top: pageSize,
       };
@@ -849,9 +848,9 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
 
       const results = response.data.value;
 
-      // Save @search.answers on the first page
-      if (!searchAnswers && response.data["@search.answers"]) {
-        searchAnswers = response.data["@search.answers"];
+      // Accumulate @search.answers if present
+      if (response.data["@search.answers"]) {
+        allAnswers.push(...response.data["@search.answers"]);
       }
 
       // Exit if no results
@@ -860,7 +859,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       // Append results to the array
       allDocuments.push(...results);
 
-      // Set searchAfter for pagination using the last result's score
+      // Set searchAfter for pagination using the last result's search score
       searchAfter = results[results.length - 1]["@search.score"]
         ? [results[results.length - 1]["@search.score"]]
         : null;
@@ -872,7 +871,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
     res.status(200).json({
       message: `Fetched documents from Azure AI Service ${indexName}.`,
       total: allDocuments.length,
-      answers: searchAnswers || [],
+      answers: allAnswers, // Return all accumulated @search.answers
       documents: allDocuments,
     });
   } catch (error) {
@@ -886,7 +885,6 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
     });
   }
 };
-
 
 // Controller to retrieve all categories associated with a specific user ID
 exports.getUserCategories = async (req, res) => {
