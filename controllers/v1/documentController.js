@@ -770,6 +770,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   const title = req.body.title || "";
   const description = req.body.description || "";
   const content = req.body.content || "";
+  const rerankerThreshold = req.body.rerankerThreshold || 1.5; // Minimum rerankerScore threshold
 
   // Build filters based on title, description, and content
   if (title) filter_of_title = `title eq '${title}'`;
@@ -853,11 +854,16 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         allAnswers.push(...response.data["@search.answers"]);
       }
 
-      // Exit if no results
-      if (!results || results.length === 0) break;
+      // Filter results based on @search.rerankerScore
+      const filteredResults = results.filter(
+        (doc) => doc["@search.rerankerScore"] >= rerankerThreshold
+      );
 
-      // Append results to the array
-      allDocuments.push(...results);
+      // Exit if no filtered results
+      if (!filteredResults || filteredResults.length === 0) break;
+
+      // Append filtered results to the array
+      allDocuments.push(...filteredResults);
 
       // Set searchAfter for pagination using the last result's search score
       searchAfter = results[results.length - 1]["@search.score"]
@@ -869,7 +875,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
     }
 
     res.status(200).json({
-      message: `Fetched documents from Azure AI Service ${indexName}.`,
+      message: `Fetched documents from Azure AI Service ${indexName} with rerankerScore >= ${rerankerThreshold}.`,
       total: allDocuments.length,
       answers: allAnswers, // Return all accumulated @search.answers
       documents: allDocuments,
