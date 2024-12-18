@@ -879,8 +879,8 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         queryType: "semantic",
         semanticConfiguration: "es-semantic-config",
         queryLanguage: "en-us",
-        answers: "extractive|count-3",
-        captions: "extractive|highlight-false",
+        answers: "extractive",
+        captions: "extractive",
         top: pageSize,
       };
 
@@ -901,12 +901,12 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         }
       );
 
-      const results = response.data.value;
+      const results = response.data;
 
       if (!results || results.length === 0) break;
 
       // Append current results
-      allDocuments.push(...results);
+      allDocuments.push(results);
 
       // Set searchAfter to the last document's search result
       searchAfter = results[results.length - 1]["@search.score"]
