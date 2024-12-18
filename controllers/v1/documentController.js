@@ -820,15 +820,14 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
 
     while (true) {
       const requestBody = {
-        search: query, // Free-text query (user input)
+        search: query,
         filter: filter,
-        queryType: "full", // Support Boolean operators
-        searchMode: "all", // Match all search terms
-        defaultSearchFields: ["title", "content", "description"], // Fields to apply the search on
+        searchMode: "any",
+        queryType: "semantic",
         semanticConfiguration: "es-semantic-config",
         queryLanguage: "en-us",
         answers: "extractive|count-3", // Enable extractive answers (top 3 answers)
-        captions: "extractive|highlight-true", // Extractive captions with highlights
+        captions: "extractive|highlight-true",
         top: pageSize,
       };
 
