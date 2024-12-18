@@ -865,31 +865,64 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       }
     }
 
-    const response = await axios.post(
-      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2021-04-30-Preview`,
-      {
-        search: query, // The search query
-        filter: filter, // Add filter query here
-        searchMode: "any", // Allows matching on any term within the query
-        queryType: "semantic", // Enables semantic search
-        semanticConfiguration: "es-semantic-config", // Name of the semantic configuration
-        top: 30, // Number of results to return
-        count: true, // Return count of results
-        queryLanguage: "en-us", // Specify the language for semantic search
-        answers: "extractive|count-3", // Enables extractive answers with top 3 answers
-        captions: "extractive|highlight-false", // Returns extractive captions for results without highlighting
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": process.env.AZURE_SEARCH_API_KEY,
-        },
+    // Fetch all documents using paged requests
+    let allDocuments = [];
+    let currentPage = 0;
+    const pageSize = 50; // Azure AI Search allows up to 1000 documents with paging
+    let searchAfter = null;
+
+    while (true) {
+      const requestBody = {
+        search: query,
+        filter: filter,
+        searchMode: "any",
+        queryType: "semantic",
+        semanticConfiguration: "es-semantic-config",
+        queryLanguage: "en-us",
+        answers: "extractive|count-3",
+        captions: "extractive|highlight-false",
+        top: pageSize,
+      };
+
+      // Include search-after for pagination
+      if (searchAfter) {
+        requestBody["searchAfter"] = searchAfter;
       }
-    );
+
+      // Make request to Azure AI Search
+      const response = await axios.post(
+        `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2023-07-01-Preview`,
+        requestBody,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": process.env.AZURE_SEARCH_API_KEY,
+          },
+        }
+      );
+
+      const results = response.data.value;
+
+      if (!results || results.length === 0) break;
+
+      // Append current results
+      allDocuments.push(...results);
+
+      // Set searchAfter to the last document's search result
+      searchAfter = results[results.length - 1]["@search.score"]
+        ? [results[results.length - 1]["@search.score"]]
+        : null;
+
+      // Stop if no searchAfter or fewer documents than the page size
+      if (!searchAfter || results.length < pageSize) break;
+
+      currentPage++;
+    }
+
     res.status(200).json({
       message: `Fetched documents from Azure AI Service ${indexName}.`,
-      total: response.data.value.length,
-      documents: response.data, // Return only document sources
+      total: allDocuments.length,
+      documents: allDocuments,
     });
   } catch (error) {
     console.error(
