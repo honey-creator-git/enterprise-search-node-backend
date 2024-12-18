@@ -1138,11 +1138,11 @@ exports.decodeUserTokenAndSave = async (req, res) => {
           name: tenantIndexName,
           fields: [
             { name: "id", type: "Edm.String", key: true, searchable: false },
-            { name: "title", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-            { name: "content", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-            { name: "description", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-            { name: "image", type: "Edm.String", searchable: true, filterable: true, sortable: true },
-            { name: "category", type: "Edm.String", searchable: true, filterable: true, sortable: true }
+            { name: "title", type: "Edm.String", searchable: true, analyzer: "standard.lucene" },
+            { name: "content", type: "Edm.String", searchable: true, analyzer: "standard.lucene" },
+            { name: "description", type: "Edm.String", searchable: true, analyzer: "standard.lucene" },
+            { name: "image", type: "Edm.String", filterable: false, searchable: false, sortable: false },
+            { name: "category", type: "Edm.String", filterable: true, searchable: true, sortable: true }
           ],
           suggesters: [
             {
