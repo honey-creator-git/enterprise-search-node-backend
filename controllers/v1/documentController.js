@@ -767,109 +767,56 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   let filter_of_content = "";
   let filter_of_category = "";
   const query = req.body.query;
-  const title = req.body.title ? req.body.title : "";
-  const description = req.body.description ? req.body.description : "";
-  const content = req.body.content ? req.body.content : "";
+  const title = req.body.title || "";
+  const description = req.body.description || "";
+  const content = req.body.content || "";
 
-  if (title.length !== 0) {
-    filter_of_title = `title eq '${title}'`;
-  }
+  // Build filters based on title, description, and content
+  if (title) filter_of_title = `title eq '${title}'`;
+  if (description) filter_of_description = `description eq '${description}'`;
+  if (content) filter_of_content = `content eq '${content}'`;
 
-  if (description.length !== 0) {
-    filter_of_description = `description eq '${description}'`;
-  }
-
-  if (content.length !== 0) {
-    filter_of_content = `content eq '${content}'`;
-  }
-
-  if (
-    filter_of_title.length !== 0 &&
-    filter_of_description.length === 0 &&
-    filter_of_content.length === 0
-  ) {
-    filter = filter_of_title;
-  } else if (
-    filter_of_title.length === 0 &&
-    filter_of_description.length !== 0 &&
-    filter_of_content === 0
-  ) {
-    filter = filter_of_description;
-  } else if (
-    filter_of_title.length === 0 &&
-    filter_of_description.length === 0 &&
-    filter_of_content !== 0
-  ) {
-    filter = filter_of_content;
-  } else if (
-    filter_of_title.length !== 0 &&
-    filter_of_description.length !== 0 &&
-    filter_of_content.length === 0
-  ) {
-    filter = `${filter_of_title} and ${filter_of_description}`;
-  } else if (
-    filter_of_title.length === 0 &&
-    filter_of_description.length !== 0 &&
-    filter_of_content.length !== 0
-  ) {
-    filter = `${filter_of_description} and ${filter_of_content}`;
-  } else if (
-    filter_of_title.length !== 0 &&
-    filter_of_description.length === 0 &&
-    filter_of_content.length !== 0
-  ) {
-    filter = `${filter_of_title} and ${filter_of_content}`;
-  } else if (
-    filter_of_title.length !== 0 &&
-    filter_of_description.length !== 0 &&
-    filter_of_content.length !== 0
-  ) {
-    filter = `${filter_of_title} and ${filter_of_description} and ${filter_of_content}`;
-  }
+  filter = [filter_of_title, filter_of_description, filter_of_content]
+    .filter(Boolean)
+    .join(" and ");
 
   try {
-    // Retrieve categories associated with the user from "category-user" index
+    // Retrieve categories associated with the user
     const categoryResponse = await client.search({
       index: `category_user_${req.coid.toLowerCase()}`,
       body: {
         query: {
           match: {
-            user: req.userId, // Match the userId in the category-user index
+            user: req.userId,
           },
         },
       },
     });
 
-    // Extract the categories from the category-user index response
     const userCategories = categoryResponse.hits.hits.flatMap((hit) =>
-      hit._source.categories.split(",").map((category) => category.trim())
+      hit._source.categories.split(",").map((c) => c.trim())
     );
 
-    // If the user has no associated categories, return an empty response
-    if (req.adminRole === false && userCategories.length === 0) {
+    if (!req.adminRole && userCategories.length === 0) {
       return res.status(200).json({
-        message: "No categories found for the user",
+        message: "No categories found for the user.",
         results: [],
       });
-    } else {
-      if (req.adminRole === false) {
-        filter_of_category = userCategories
-          .map((category) => `category eq '${category}'`)
-          .join(" or ");
+    }
 
-        if (filter.length === 0) {
-          filter = filter_of_category;
-        } else if (filter.length > 0) {
-          filter = filter + " and " + filter_of_category;
-        }
-      }
+    if (!req.adminRole) {
+      filter_of_category = userCategories
+        .map((c) => `category eq '${c}'`)
+        .join(" or ");
+      filter = filter ? `${filter} and (${filter_of_category})` : filter_of_category;
     }
 
     // Fetch all documents using paged requests
     let allDocuments = [];
-    let currentPage = 0;
-    const pageSize = 50; // Azure AI Search allows up to 1000 documents with paging
     let searchAfter = null;
+    const pageSize = 50;
+
+    let searchAnswers = null; // Variable to store @search.answers
 
     while (true) {
       const requestBody = {
@@ -879,17 +826,16 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         queryType: "semantic",
         semanticConfiguration: "es-semantic-config",
         queryLanguage: "en-us",
-        answers: "extractive",
+        answers: "extractive", // Enable extractive answers (top 3 answers)
         captions: "extractive",
         top: pageSize,
       };
 
-      // Include search-after for pagination
+      // Include searchAfter token if available
       if (searchAfter) {
         requestBody["searchAfter"] = searchAfter;
       }
 
-      // Make request to Azure AI Search
       const response = await axios.post(
         `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2023-07-01-Preview`,
         requestBody,
@@ -901,27 +847,32 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         }
       );
 
-      const results = response.data;
+      const results = response.data.value;
 
+      // Save @search.answers on the first page
+      if (!searchAnswers && response.data["@search.answers"]) {
+        searchAnswers = response.data["@search.answers"];
+      }
+
+      // Exit if no results
       if (!results || results.length === 0) break;
 
-      // Append current results
-      allDocuments.push(results);
+      // Append results to the array
+      allDocuments.push(...results);
 
-      // Set searchAfter to the last document's search result
-      searchAfter = results[results.length - 1]["value"]["@search.score"]
-        ? [results[results.length - 1]["value"]["@search.score"]]
+      // Set searchAfter for pagination using the last result's score
+      searchAfter = results[results.length - 1]["@search.score"]
+        ? [results[results.length - 1]["@search.score"]]
         : null;
 
-      // Stop if no searchAfter or fewer documents than the page size
+      // Stop if no searchAfter or fewer documents than page size
       if (!searchAfter || results.length < pageSize) break;
-
-      currentPage++;
     }
 
     res.status(200).json({
       message: `Fetched documents from Azure AI Service ${indexName}.`,
       total: allDocuments.length,
+      answers: searchAnswers || [],
       documents: allDocuments,
     });
   } catch (error) {
@@ -929,9 +880,13 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       "Error retrieving documents:",
       error.response ? error.response.data : error.message
     );
-    throw error;
+    res.status(500).json({
+      message: "Failed to fetch documents.",
+      error: error.message,
+    });
   }
 };
+
 
 // Controller to retrieve all categories associated with a specific user ID
 exports.getUserCategories = async (req, res) => {
