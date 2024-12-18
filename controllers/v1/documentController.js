@@ -766,7 +766,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
   let filter_of_description = "";
   let filter_of_content = "";
   let filter_of_category = "";
-  const query = req.body.query;
+  const query = req.body.query; // Free-text query with Boolean operators
   const title = req.body.title || "";
   const description = req.body.description || "";
   const content = req.body.content || "";
@@ -820,14 +820,15 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
 
     while (true) {
       const requestBody = {
-        search: query,
+        search: query, // Free-text query (user input)
         filter: filter,
-        searchMode: "any",
-        queryType: "semantic",
+        queryType: "full", // Support Boolean operators
+        searchMode: "all", // Match all search terms
+        defaultSearchFields: ["title", "content", "description"], // Fields to apply the search on
         semanticConfiguration: "es-semantic-config",
         queryLanguage: "en-us",
         answers: "extractive|count-3", // Enable extractive answers (top 3 answers)
-        captions: "extractive",
+        captions: "extractive|highlight-true", // Extractive captions with highlights
         top: pageSize,
       };
 
