@@ -909,8 +909,8 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       allDocuments.push(results);
 
       // Set searchAfter to the last document's search result
-      searchAfter = results[results.length - 1]["@search.score"]
-        ? [results[results.length - 1]["@search.score"]]
+      searchAfter = results[results.length - 1]["value"]["@search.score"]
+        ? [results[results.length - 1]["value"]["@search.score"]]
         : null;
 
       // Stop if no searchAfter or fewer documents than the page size
