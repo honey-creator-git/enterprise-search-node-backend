@@ -572,8 +572,13 @@ async function fetchAllFileContents(files, categoryId, drive) {
       const metadata = await fetchFileMetadata(file.id, drive);
       const contentLength = metadata.size; // File size from metadata
 
-      if (!contentLength) {
-        console.error(`Skipping file ${file.name}: File size is missing.`);
+      // Debugging logs
+      console.log(`File Name: ${file.name}`);
+      console.log(`Content Length (size): ${contentLength}`);
+      console.log(`Type of Content Length: ${typeof contentLength}`);
+
+      if (!contentLength || typeof contentLength !== "number") {
+        console.error(`Skipping file ${file.name}: File size is invalid.`);
         continue;
       }
 
@@ -632,7 +637,9 @@ async function fetchFileMetadata(fileId, drive) {
       fileId: fileId,
       fields: "id, name, mimeType, size",
     });
-    return response.data; // Includes file size
+    const metadata = response.data;
+    metadata.size = metadata.size ? Number(metadata.size) : 0; // Ensure size is a number
+    return metadata; // Includes file size
   } catch (error) {
     console.error("Failed to fetch file metadata from Google Drive:", error);
     throw new Error("Failed to fetch file metadata");
