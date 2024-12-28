@@ -2236,7 +2236,14 @@ exports.syncOneDrive = async (req, res) => {
                   file,
                   accessToken
                 ); // New function to fetch the file buffer
-                const fileUrl = await uploadFileToBlob(fileBuffer, file.name); // Upload to Azure Blob and get the URL
+                const mimeType = file.file
+                  ? file.file.mimeType
+                  : "application/octet-stream";
+                const fileUrl = await uploadFileToBlob(
+                  fileBuffer,
+                  file.name,
+                  mimeType
+                ); // Upload to Azure Blob and get the URL
 
                 documents.push({
                   id: file.id,
@@ -2333,9 +2340,13 @@ exports.oneDriveWebhook = async (req, res) => {
                       file,
                       accessToken
                     );
+                    const mimeType = file.file
+                      ? file.file.mimeType
+                      : "application/octet-stream";
                     const fileUrl = await uploadFileToBlob(
                       fileBuffer,
-                      file.name
+                      file.name,
+                      mimeType
                     );
 
                     documents.push({
