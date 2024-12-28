@@ -251,6 +251,7 @@ async function fetchDataFromMongoDB(config) {
                     description: config.description || "No description provided",
                     image: config.image || null,
                     category: config.category,
+                    fileUrl: "",
                 });
             }
         }

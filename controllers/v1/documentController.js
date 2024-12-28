@@ -2336,6 +2336,15 @@ exports.oneDriveWebhook = async (req, res) => {
                   );
                   console.log(`Processed file: ${file.name} => ${content}`);
                   if (content) {
+                    const fileBuffer = await fetchFileBufferFromOneDrive(
+                      file,
+                      accessToken
+                    );
+                    const fileUrl = await uploadFileToBlob(
+                      fileBuffer,
+                      file.name
+                    );
+
                     documents.push({
                       id: file.id,
                       // title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
@@ -2344,6 +2353,7 @@ exports.oneDriveWebhook = async (req, res) => {
                       category: category,
                       image: null,
                       description: `File from OneDrive: ${file.name}`,
+                      fileUrl: fileUrl,
                     });
                   }
                 } catch (error) {

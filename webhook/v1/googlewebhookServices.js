@@ -4,8 +4,9 @@ const cheerio = require("cheerio");
 const xlsx = require("xlsx");
 const mammoth = require("mammoth");
 const pdf = require("pdf-parse");
-const pptParser = require('ppt-parser');
+const pptParser = require("ppt-parser");
 const axios = require("axios");
+const { uploadFileToBlob } = require("../../services/v1/blobStorage");
 
 async function checkExistOfGoogleDriveConfig(client_id, coid) {
   try {
@@ -35,8 +36,13 @@ async function checkExistOfGoogleDriveConfig(client_id, coid) {
       return "configuration is not existed";
     }
   } catch (error) {
-    console.error("Error checking existance of google drive config in ElasticSearch:", error);
-    throw new Error("Failed to check existance of google drive config in Elasticsearch");
+    console.error(
+      "Error checking existance of google drive config in ElasticSearch:",
+      error
+    );
+    throw new Error(
+      "Failed to check existance of google drive config in Elasticsearch"
+    );
   }
 }
 
@@ -73,7 +79,9 @@ async function saveWebhookDetails(
 
     // If index doesn't exist, create it with a proper mapping
     if (!indexExists) {
-      console.log(`Index ${indexName} does not exist. Creating index with mapping.`);
+      console.log(
+        `Index ${indexName} does not exist. Creating index with mapping.`
+      );
       await client.indices.create({
         index: indexName,
         body: {
@@ -165,7 +173,7 @@ async function getWebhookDetailsByResourceId(resourceId) {
         webhookUrl,
         startPageToken,
         client_id,
-        client_secret
+        client_secret,
       } = hits[0]._source;
       console.log(`Webhook details found for resourceId: ${resourceId}`);
       return {
@@ -177,7 +185,7 @@ async function getWebhookDetailsByResourceId(resourceId) {
         webhookUrl,
         startPageToken,
         client_id,
-        client_secret
+        client_secret,
       };
     } else {
       console.log(`No details found for resourceId: ${resourceId}`);
@@ -223,6 +231,8 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
     });
 
     const content = await fetchFileContentByType(file.data, drive);
+    const fileBuffer = await fetchFileBufferFromGoogleDrive(file.id, drive);
+    const fileUrl = await uploadFileToBlob(fileBuffer, file.name); // Upload to Azure Blob Storage
 
     if (content !== "Unsupported file type") {
       return {
@@ -231,6 +241,7 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
         content: content,
         description: "No description available",
         category: categoryId, // Assign category ID
+        fileUrl: fileUrl,
       };
     } else {
       console.log(`Skipping unsupported file type for file: ${file.data.name}`);
@@ -247,7 +258,8 @@ async function fetchGoogleSheetContent(fileId, drive) {
     const response = await drive.files.export(
       {
         fileId: fileId,
-        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       },
       { responseType: "arraybuffer" }
     );
@@ -275,11 +287,14 @@ async function fetchFileContentByType(file, drive) {
     return await fetchPdfContent(file.id, drive);
   } else if (file.mimeType === "text/csv") {
     return await fetchCsvContent(file.id, drive);
-  } else if (file.mimeType === "application/xml" || file.mimeType === "text/xml") {
+  } else if (
+    file.mimeType === "application/xml" ||
+    file.mimeType === "text/xml"
+  ) {
     return await fetchXmlContent(file.id, drive);
   } else if (
     file.mimeType ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     file.mimeType === "application/msword"
   ) {
     return await fetchWordContent(file.id, drive);
@@ -292,7 +307,11 @@ async function fetchFileContentByType(file, drive) {
     return await fetchGoogleSheetContent(file.id, drive); // Google Sheets
   } else if (file.mimeType === "application/rtf") {
     return await fetchRtfContent(file.id, drive);
-  } else if (file.mimeType === "application/vnd.ms-powerpoint" || file.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+  } else if (
+    file.mimeType === "application/vnd.ms-powerpoint" ||
+    file.mimeType ===
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  ) {
     return await fetchPptContent(file.id, drive);
   } else if (file.mimeType === "text/html") {
     return await fetchHtmlContent(file.id, drive);
@@ -449,8 +468,15 @@ async function pushToAzureSearch(documents, coid) {
   }
 }
 
-async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, datasourceId, client_id, client_secret, coid) {
-
+async function registerWebhook(
+  gc_accessToken,
+  gc_refreshToken,
+  webhookUrl,
+  datasourceId,
+  client_id,
+  client_secret,
+  coid
+) {
   // Validate required inputs
   if (!gc_accessToken || !gc_refreshToken || !webhookUrl || !datasourceId) {
     return res.status(400).json({
@@ -502,7 +528,9 @@ async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, data
       );
     } catch (saveError) {
       console.error("Failed to save webhook details:", saveError.message);
-      throw new Error("Failed to save webhook details after registering the webhook");
+      throw new Error(
+        "Failed to save webhook details after registering the webhook"
+      );
     }
 
     return {
@@ -516,13 +544,15 @@ async function registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, data
       details: error.message,
     };
   }
-};
+}
 
 async function fetchAllFileContents(files, categoryId, drive) {
   const fileData = [];
   for (const file of files) {
     try {
       const content = await fetchFileContentByType(file, drive);
+      const fileBuffer = await fetchFileBufferFromGoogleDrive(file.id, drive);
+      const fileUrl = await uploadFileToBlob(fileBuffer, file.name); // Upload to Azure Blob Storage
       if (content !== "Unsupported file type") {
         console.log("File Name => ", file.name);
         console.log("File Content => ", content);
@@ -532,6 +562,7 @@ async function fetchAllFileContents(files, categoryId, drive) {
           content: content,
           description: "No description available",
           category: `${categoryId}`,
+          fileUrl: fileUrl,
         });
       } else {
         console.log(`Skipping unsupported file type for file: ${file.name}`);
@@ -543,6 +574,23 @@ async function fetchAllFileContents(files, categoryId, drive) {
   return fileData;
 }
 
+async function fetchFileBufferFromGoogleDrive(fileId, drive) {
+  try {
+    const response = await drive.files.get(
+      {
+        fileId: fileId,
+        alt: "media",
+      },
+      { responseType: "arraybuffer" }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("Failed to fetch file buffer from Google Drive:", error);
+    throw new Error("Failed to fetch file buffer");
+  }
+}
+
 module.exports = {
   saveWebhookDetails,
   fetchGoogleDriveChanges,
@@ -552,5 +600,5 @@ module.exports = {
   pushToAzureSearch,
   registerWebhook,
   fetchAllFileContents,
-  checkExistOfGoogleDriveConfig
+  checkExistOfGoogleDriveConfig,
 };

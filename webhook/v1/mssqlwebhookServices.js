@@ -243,6 +243,7 @@ async function fetchAndProcessFieldContent(config) {
                     description: config.description || "No Description Provided",
                     image: config.image || null,
                     category: config.category || "default",
+                    fileUrl: "",
                 });
             }
         }
