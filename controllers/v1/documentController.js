@@ -824,7 +824,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
     // Fetch all documents using paged requests
     let allDocuments = [];
     let allAnswers = []; // Array to store all @search.answers
-    let searchAfter = null;
+    let skip = 0;
     const pageSize = 50;
 
     while (true) {
@@ -838,12 +838,8 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
         answers: "extractive|count-3", // Enable extractive answers (top 3 answers)
         captions: "extractive|highlight-true",
         top: pageSize,
+        skip: skip, // Pagination using skip
       };
-
-      // Include searchAfter token if available
-      if (searchAfter) {
-        requestBody["searchAfter"] = searchAfter;
-      }
 
       const response = await axios.post(
         `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2023-07-01-Preview`,
@@ -874,13 +870,10 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       // Append filtered results to the array
       allDocuments.push(...filteredResults);
 
-      // Set searchAfter for pagination using the last result's search score
-      searchAfter = results[results.length - 1]["@search.score"]
-        ? [results[results.length - 1]["@search.score"]]
-        : null;
+      // Increment skip by page size for the next batch
+      skip += pageSize;
 
-      // Stop if no searchAfter or fewer documents than page size
-      if (!searchAfter || results.length < pageSize) break;
+      if (results.length < pageSize) break; // Stop if fewer documents are returned
     }
 
     res.status(200).json({
