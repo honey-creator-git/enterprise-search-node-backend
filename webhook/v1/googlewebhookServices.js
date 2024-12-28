@@ -7,7 +7,6 @@ const pdf = require("pdf-parse");
 const pptParser = require("ppt-parser");
 const axios = require("axios");
 const {
-  uploadFileToBlob,
   uploadFileToBlobForGoogleDrive,
 } = require("../../services/v1/blobStorage");
 
@@ -231,8 +230,14 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
     // Fetch file metadata
     const metadata = await fetchFileMetadata(file.id, drive);
     const contentLength = metadata.size; // File size from metadata
+    const mimeType = metadata.mimeType; // MIME type from metadata
 
-    if (!contentLength) {
+    // Debugging logs
+    console.log(`File nam: ${file.name}`);
+    console.log(`Content Length (size): ${contentLength}`);
+    console.log(`Type of Content Length: ${typeof contentLength}`);
+
+    if (!contentLength || typeof contentLength !== "number") {
       console.error(`Skipping file ${file.name}: File size is missing.`);
       return null;
     }
@@ -244,7 +249,8 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
     const fileUrl = await uploadFileToBlobForGoogleDrive(
       fileBuffer,
       file.name,
-      contentLength
+      contentLength,
+      mimeType
     );
 
     const file = await drive.files.get({
