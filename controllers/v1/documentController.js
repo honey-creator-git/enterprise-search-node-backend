@@ -6,7 +6,12 @@ const {
 const client = require("../../config/elasticsearch");
 const axios = require("axios");
 const WebSocket = require("ws");
-const { S3Client, GetObjectCommand, ListObjectsV2Command, HeadBucketCommand } = require('@aws-sdk/client-s3');
+const {
+  S3Client,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  HeadBucketCommand,
+} = require("@aws-sdk/client-s3");
 const { google } = require("googleapis");
 const {
   saveWebhookDetails,
@@ -22,17 +27,17 @@ const {
 const {
   checkExistOfMySQLConfig,
   fetchAndProcessFieldContentOfMySQL,
-  registerMySQLConnection
+  registerMySQLConnection,
 } = require("../../webhook/v1/mysqlwebhookServices");
 const {
   registerPostgreSQLConnection,
   checkExistOfPostgreSQLConfig,
-  fetchAndProcessFieldContentOfPostgreSQL
+  fetchAndProcessFieldContentOfPostgreSQL,
 } = require("../../webhook/v1/postgresqlwebhookServices");
 const {
   checkExistOfMongoDBConfig,
   fetchDataFromMongoDB,
-  registerMongoDBConnection
+  registerMongoDBConnection,
 } = require("../../webhook/v1/mongodbwebhookServices");
 const {
   registerOneDriveConnection,
@@ -42,24 +47,26 @@ const {
   fetchFileContentFromOneDrive,
   createOneDriveSubscription,
   getStoredCredentials,
+  fetchFileBufferFromOneDrive,
 } = require("../../webhook/v1/onedrivewebhookServices");
 const {
   saveSharePointTokensToElasticSearch,
   fetchAllAccessibleSites,
   getAccessTokenOfSharePoint,
-  checkExistOfSharePointConfig
+  checkExistOfSharePointConfig,
 } = require("../../webhook/v1/sharepointwebhookServices");
 const {
   checkExistOfMSSQLConfig,
   saveMSSQLConnection,
-  fetchAndProcessFieldContent
+  fetchAndProcessFieldContent,
 } = require("../../webhook/v1/mssqlwebhookServices");
 const {
   checkBucketExists,
   getFileFromBucket,
   listFilesInBucket,
-  processFileContent
+  processFileContent,
 } = require("../../webhook/v1/wasabiwebhookServices");
+const { uploadFileToBlob } = require("../../services/v1/blobStorage");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -809,7 +816,9 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       filter_of_category = userCategories
         .map((c) => `category eq '${c}'`)
         .join(" or ");
-      filter = filter ? `${filter} and (${filter_of_category})` : filter_of_category;
+      filter = filter
+        ? `${filter} and (${filter_of_category})`
+        : filter_of_category;
     }
 
     // Fetch all documents using paged requests
@@ -929,7 +938,9 @@ exports.getUserCategories = async (req, res) => {
     });
 
     // Extract valid data source IDs (categories) that exist in the datasource index
-    const validDataSourceIds = datasourceResponse.hits.hits.map((hit) => hit._id);
+    const validDataSourceIds = datasourceResponse.hits.hits.map(
+      (hit) => hit._id
+    );
 
     // Step 3: Return the filtered categories (only valid data source IDs)
     res.status(200).json({
@@ -1125,9 +1136,15 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       }
     } catch (error) {
       if (error.response?.status === 404) {
-        console.log(`Index '${tenantIndexName}' does not exist. Proceeding to create it.`);
+        console.log(
+          `Index '${tenantIndexName}' does not exist. Proceeding to create it.`
+        );
       } else {
-        console.error(`Error checking index existence: ${error.response?.data || error.message}`);
+        console.error(
+          `Error checking index existence: ${
+            error.response?.data || error.message
+          }`
+        );
         throw error; // Re-throw non-404 errors
       }
     }
@@ -1138,11 +1155,45 @@ exports.decodeUserTokenAndSave = async (req, res) => {
           name: tenantIndexName,
           fields: [
             { name: "id", type: "Edm.String", key: true, searchable: false },
-            { name: "title", type: "Edm.String", searchable: true, analyzer: "standard.lucene" },
-            { name: "content", type: "Edm.String", searchable: true, analyzer: "standard.lucene" },
-            { name: "description", type: "Edm.String", searchable: true, analyzer: "standard.lucene" },
-            { name: "image", type: "Edm.String", filterable: false, searchable: false, sortable: false },
-            { name: "category", type: "Edm.String", filterable: true, searchable: true, sortable: true }
+            {
+              name: "title",
+              type: "Edm.String",
+              searchable: true,
+              analyzer: "standard.lucene",
+            },
+            {
+              name: "content",
+              type: "Edm.String",
+              searchable: true,
+              analyzer: "standard.lucene",
+            },
+            {
+              name: "description",
+              type: "Edm.String",
+              searchable: true,
+              analyzer: "standard.lucene",
+            },
+            {
+              name: "image",
+              type: "Edm.String",
+              filterable: false,
+              searchable: false,
+              sortable: false,
+            },
+            {
+              name: "fileUrl",
+              type: "Edm.String",
+              filterable: false,
+              searchable: false,
+              sortable: false,
+            },
+            {
+              name: "category",
+              type: "Edm.String",
+              filterable: true,
+              searchable: true,
+              sortable: true,
+            },
           ],
           suggesters: [
             {
@@ -1158,7 +1209,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
                   titleField: { fieldName: "title" },
                   prioritizedContentFields: [
                     { fieldName: "content" },
-                    { fieldName: "description" }
+                    { fieldName: "description" },
                   ],
                 },
               },
@@ -1174,11 +1225,17 @@ exports.decodeUserTokenAndSave = async (req, res) => {
           },
         });
       } catch (creationError) {
-        console.error(`Failed to create index: ${creationError.response?.data || creationError.message}`);
+        console.error(
+          `Failed to create index: ${
+            creationError.response?.data || creationError.message
+          }`
+        );
         throw creationError; // Handle index creation errors
       }
     } else {
-      console.log(`Skipping index creation as '${tenantIndexName}' already exists.`);
+      console.log(
+        `Skipping index creation as '${tenantIndexName}' already exists.`
+      );
     }
 
     // Search for categories with the specified tenantId in Elasticsearch
@@ -1324,7 +1381,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
 
     res.status(201).json({
       message: `User information saved to both Elasticsearch and Azure Cognitive Search indexes successfully.`,
-      elasticsearchResponse: esResponse
+      elasticsearchResponse: esResponse,
     });
   } catch (error) {
     console.error("Error saving user:", error);
@@ -1467,9 +1524,9 @@ exports.deleteUserFromTenant = async (req, res) => {
       index: usersIndexName,
       body: {
         query: {
-          match: { _id: userId }
-        }
-      }
+          match: { _id: userId },
+        },
+      },
     });
 
     if (userSearchResponse.hits.total.value === 0) {
@@ -1504,7 +1561,9 @@ exports.deleteUserFromTenant = async (req, res) => {
         `Deleted document from ${categoryUserIndexName} with ID: ${categoryDocumentId}`
       );
     } else {
-      console.log(`No document found in ${categoryUserIndexName} for user: ${uoid}`);
+      console.log(
+        `No document found in ${categoryUserIndexName} for user: ${uoid}`
+      );
     }
 
     // Step 3: Delete the user document from the users index
@@ -1526,7 +1585,7 @@ exports.deleteUserFromTenant = async (req, res) => {
       details: error.message,
     });
   }
-}
+};
 
 exports.getDocumentsWithCategoryId = async (req, res) => {
   const indexName = ("tenant_" + req.coid).toLowerCase();
@@ -1688,9 +1747,17 @@ exports.getAllDataSourceTypes = async (req, res) => {
 };
 
 exports.syncGoogleDrive = async (req, res) => {
-  const { gc_accessToken, gc_refreshToken, client_id, client_secret, name, type } = req.body;
+  const {
+    gc_accessToken,
+    gc_refreshToken,
+    client_id,
+    client_secret,
+    name,
+    type,
+  } = req.body;
 
-  const webhookUrl = "https://es-services.onrender.com/api/v1/sync-google-drive/webhook";
+  const webhookUrl =
+    "https://es-services.onrender.com/api/v1/sync-google-drive/webhook";
 
   // Initialize Google Drive API Client
   const auth = new google.auth.OAuth2(client_id, client_secret);
@@ -1701,11 +1768,17 @@ exports.syncGoogleDrive = async (req, res) => {
     });
   }
 
-  const checkExistOfGoogleDriveConfigResponse = await checkExistOfGoogleDriveConfig(client_id, req.coid);
+  const checkExistOfGoogleDriveConfigResponse =
+    await checkExistOfGoogleDriveConfig(client_id, req.coid);
 
-  console.log("Check Exist of Google Drive Response => ", checkExistOfGoogleDriveConfigResponse);
+  console.log(
+    "Check Exist of Google Drive Response => ",
+    checkExistOfGoogleDriveConfigResponse
+  );
 
-  if (checkExistOfGoogleDriveConfigResponse === "configuration is not existed") {
+  if (
+    checkExistOfGoogleDriveConfigResponse === "configuration is not existed"
+  ) {
     const esNewCategoryResponse = await axios.post(
       "https://es-services.onrender.com/api/v1/category",
       {
@@ -1743,9 +1816,21 @@ exports.syncGoogleDrive = async (req, res) => {
 
         const files = filesResponse.data.files;
 
-        const fileData = await fetchAllFileContents(files, newCategoryId, drive);
+        const fileData = await fetchAllFileContents(
+          files,
+          newCategoryId,
+          drive
+        );
 
-        const registerWebhookRes = await registerWebhook(gc_accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
+        const registerWebhookRes = await registerWebhook(
+          gc_accessToken,
+          gc_refreshToken,
+          webhookUrl,
+          newCategoryId,
+          client_id,
+          client_secret,
+          req.coid
+        );
 
         if (fileData.length > 0) {
           const syncResponse = await pushToAzureSearch(fileData, req.coid);
@@ -1755,7 +1840,11 @@ exports.syncGoogleDrive = async (req, res) => {
         }
       } catch (tokenError) {
         console.error("Access token expired. Refreshing token...");
-        const refreshedToken = await refreshAccessToken(client_id, client_secret, gc_refreshToken);
+        const refreshedToken = await refreshAccessToken(
+          client_id,
+          client_secret,
+          gc_refreshToken
+        );
         accessToken = refreshedToken.access_token;
 
         auth.setCredentials({ access_token: accessToken });
@@ -1768,9 +1857,21 @@ exports.syncGoogleDrive = async (req, res) => {
 
         const files = filesResponse.data.files;
 
-        const fileData = await fetchAllFileContents(files, newCategoryId, drive);
+        const fileData = await fetchAllFileContents(
+          files,
+          newCategoryId,
+          drive
+        );
 
-        const registerWebhookRes = await registerWebhook(accessToken, gc_refreshToken, webhookUrl, newCategoryId, client_id, client_secret, req.coid);
+        const registerWebhookRes = await registerWebhook(
+          accessToken,
+          gc_refreshToken,
+          webhookUrl,
+          newCategoryId,
+          client_id,
+          client_secret,
+          req.coid
+        );
 
         if (fileData.length > 0) {
           const syncResponse = await pushToAzureSearch(fileData, req.coid);
@@ -1800,9 +1901,11 @@ exports.syncGoogleDrive = async (req, res) => {
       //     console.log("Received message: ", message);
       //   }
     });
-  } else if (checkExistOfGoogleDriveConfigResponse === "configuration is already existed") {
+  } else if (
+    checkExistOfGoogleDriveConfigResponse === "configuration is already existed"
+  ) {
     return res.status(200).json({
-      data: "This Google Drive is already configured."
+      data: "This Google Drive is already configured.",
     });
   }
 };
@@ -1850,18 +1953,27 @@ exports.googleDriveWebhook = async (req, res) => {
 
       if (!changedFileId) {
         console.log("No specific file ID provided. Fetching changes...");
-        const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
+        const { changes, newPageToken } = await fetchGoogleDriveChanges(
+          auth,
+          startPageToken
+        );
 
         for (const change of changes) {
           // Check if the file is trashed
           if (change.file && change.file.trashed) {
-            console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
+            console.log(
+              `Skipping trashed file: ${change.file.name} (${change.file.id})`
+            );
             continue; // Skip this iteration for trashed files
           }
 
           if (change.fileId) {
             console.log(`Processing fileId: ${change.fileId}`);
-            const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
+            const fileData = await fetchFileData(
+              change.fileId,
+              categoryId,
+              accessToken
+            );
             console.log("File Data => ", fileData);
             if (fileData) {
               await pushToAzureSearch([fileData], coid);
@@ -1884,7 +1996,11 @@ exports.googleDriveWebhook = async (req, res) => {
         );
       } else {
         console.log(`Processing specific fileId: ${changedFileId}`);
-        const fileData = await fetchFileData(changedFileId, categoryId, accessToken);
+        const fileData = await fetchFileData(
+          changedFileId,
+          categoryId,
+          accessToken
+        );
         if (fileData) {
           await pushToAzureSearch([fileData], coid);
         }
@@ -1892,7 +2008,11 @@ exports.googleDriveWebhook = async (req, res) => {
     } catch (tokenError) {
       console.error("Access token expired. Refreshing token...");
       try {
-        const refreshedToken = await refreshAccessToken(client_id, client_secret, refreshToken);
+        const refreshedToken = await refreshAccessToken(
+          client_id,
+          client_secret,
+          refreshToken
+        );
         accessToken = refreshedToken.access_token;
         console.log("Refreshed Access Token => ", accessToken);
 
@@ -1914,18 +2034,27 @@ exports.googleDriveWebhook = async (req, res) => {
 
         if (!changedFileId) {
           console.log("No specific file ID provided. Fetching changes...");
-          const { changes, newPageToken } = await fetchGoogleDriveChanges(auth, startPageToken);
+          const { changes, newPageToken } = await fetchGoogleDriveChanges(
+            auth,
+            startPageToken
+          );
 
           for (const change of changes) {
             // Check if the file is trashed
             if (change.file && change.file.trashed) {
-              console.log(`Skipping trashed file: ${change.file.name} (${change.file.id})`);
+              console.log(
+                `Skipping trashed file: ${change.file.name} (${change.file.id})`
+              );
               continue; // Skip this iteration for trashed files
             }
 
             if (change.fileId) {
               console.log(`Processing fileId: ${change.fileId}`);
-              const fileData = await fetchFileData(change.fileId, categoryId, accessToken);
+              const fileData = await fetchFileData(
+                change.fileId,
+                categoryId,
+                accessToken
+              );
               if (fileData) {
                 await pushToAzureSearch([fileData], coid);
               }
@@ -1947,7 +2076,11 @@ exports.googleDriveWebhook = async (req, res) => {
           );
         } else {
           console.log(`Processing specific fileId: ${changedFileId}`);
-          const fileData = await fetchFileData(changedFileId, categoryId, accessToken);
+          const fileData = await fetchFileData(
+            changedFileId,
+            categoryId,
+            accessToken
+          );
           if (fileData) {
             await pushToAzureSearch([fileData], coid);
           }
@@ -1975,7 +2108,9 @@ exports.testWebhookTokenExpiration = (req, res) => {
   const { client_id, redirect_uri } = req.body;
 
   if (!client_id || !redirect_uri) {
-    return res.status(400).json({ error: "client_id and redirect_uri are required" });
+    return res
+      .status(400)
+      .json({ error: "client_id and redirect_uri are required" });
   }
 
   const oauth2Client = new google.auth.OAuth2(client_id, null, redirect_uri);
@@ -1996,49 +2131,59 @@ exports.getTokens = async (req, res) => {
   }
 
   try {
-    const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uri);
+    const oauth2Client = new google.auth.OAuth2(
+      client_id,
+      client_secret,
+      redirect_uri
+    );
 
     const { tokens } = await oauth2Client.getToken(code);
 
     // Save tokens securely in your database or return them to the frontend
     res.status(200).json(tokens);
   } catch (error) {
-    console.error("Error exchanging authorization code for tokens:", error.message);
-    res.status(500).json({ error: "Failed to exchange authorization code for tokens" });
+    console.error(
+      "Error exchanging authorization code for tokens:",
+      error.message
+    );
+    res
+      .status(500)
+      .json({ error: "Failed to exchange authorization code for tokens" });
   }
 };
 
 exports.syncOneDrive = async (req, res) => {
-  const {
-    tenant_id,
-    client_id,
-    client_secret,
-    name,
-    type,
-    userName,
-  } = req.body;
+  const { tenant_id, client_id, client_secret, name, type, userName } =
+    req.body;
 
-  if (
-    !tenant_id || !client_id || !client_secret || !name || !type
-  ) {
+  if (!tenant_id || !client_id || !client_secret || !name || !type) {
     return res.status(400).json({
-      error: "Missing required parameters"
+      error: "Missing required parameters",
     });
   }
 
   const graphBaseUrl = "https://graph.microsoft.com/v1.0";
 
-  const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(client_id, req.coid);
+  const checkExistOfOneDriveConfigResponse = await checkExistOfOneDriveConfig(
+    client_id,
+    req.coid
+  );
   // const checkExistOfOneDriveConfigResponse = "configuration is not existed";
 
   if (checkExistOfOneDriveConfigResponse === "configuration is not existed") {
-
     // Main function to sync data
     try {
-      const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
+      const accessToken = await getAccessToken(
+        tenant_id,
+        client_id,
+        client_secret
+      );
 
       // Create subscription and get expirationDateTime
-      const subscription = await createOneDriveSubscription(accessToken, userName);
+      const subscription = await createOneDriveSubscription(
+        accessToken,
+        userName
+      );
       const expirationDateTime = subscription.expirationDateTime;
 
       console.log("Expiration Time => ", expirationDateTime);
@@ -2057,7 +2202,8 @@ exports.syncOneDrive = async (req, res) => {
         }
       );
 
-      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      const newCategoryId =
+        esNewCategoryResponse.data.elasticsearchResponse._id;
 
       // Immediately return the response
       res.status(200).json({
@@ -2075,17 +2221,30 @@ exports.syncOneDrive = async (req, res) => {
           userName: userName,
           category: newCategoryId,
           coid: req.coid,
-          expirationDateTime: expirationDateTime
+          expirationDateTime: expirationDateTime,
         });
 
-        const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
+        const files = await getFilesFromOneDrive(
+          accessToken,
+          graphBaseUrl,
+          userName
+        );
 
         const documents = [];
         for (const file of files) {
           if (file) {
             try {
-              const content = await fetchFileContentFromOneDrive(file, accessToken);
+              const content = await fetchFileContentFromOneDrive(
+                file,
+                accessToken
+              );
               if (content) {
+                const fileBuffer = await fetchFileBufferFromOneDrive(
+                  file,
+                  accessToken
+                ); // New function to fetch the file buffer
+                const fileUrl = await uploadFileToBlob(fileBuffer, file.name); // Upload to Azure Blob and get the URL
+
                 documents.push({
                   id: file.id,
                   // title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
@@ -2093,11 +2252,15 @@ exports.syncOneDrive = async (req, res) => {
                   content,
                   category: newCategoryId,
                   image: null,
-                  description: `File from OneDrive: ${file.name}`
-                })
+                  description: `File from OneDrive: ${file.name}`,
+                  fileUrl: fileUrl, // Storing the file URL
+                });
               }
             } catch (error) {
-              console.error(`Error processing file: ${file.name}`, error.message);
+              console.error(
+                `Error processing file: ${file.name}`,
+                error.message
+              );
             }
           } else {
             console.error.log(`Skipping unsupported or folder: ${file.name}`);
@@ -2107,24 +2270,23 @@ exports.syncOneDrive = async (req, res) => {
         if (documents.length > 0) {
           const azureResponse = await pushToAzureSearch(documents, req.coid);
         }
-      })
+      });
     } catch (error) {
       console.error("Error syncing OneDrive data: ", error.message);
       return res.status(500).json({
-        error: 'Failed to sync OneDrive data'
+        error: "Failed to sync OneDrive data",
       });
     }
-
-  } else if (checkExistOfOneDriveConfigResponse === "configuration is already existed") {
+  } else if (
+    checkExistOfOneDriveConfigResponse === "configuration is already existed"
+  ) {
     return res.status(200).json({
-      data: "This OneDrive is already configured."
+      data: "This OneDrive is already configured.",
     });
   }
-
-}
+};
 
 exports.oneDriveWebhook = async (req, res) => {
-
   if (req.query && req.query.validationToken) {
     return res.status(200).send(req.query.validationToken); // Respond to validation request
   }
@@ -2135,32 +2297,43 @@ exports.oneDriveWebhook = async (req, res) => {
   if (value && value.length > 0) {
     try {
       const notifications = value.map(async (notification) => {
-
         if (notification.resource && notification.changeType) {
           const graphBaseUrl = "https://graph.microsoft.com/v1.0";
           // const fileId = notification.resourceData.id;  // The file ID from the notification
           const changeType = notification.changeType; // Get the change type (created, updated, deleted)
-          const userName = notification.resource.split('/')[1];  // Extract userName from the notification (adjust if needed)
+          const userName = notification.resource.split("/")[1]; // Extract userName from the notification (adjust if needed)
 
           console.log(`File changed with change type: ${changeType}`);
 
           try {
-            const credentials = await getStoredCredentials(userName);  // Retrieve stored credentials from DB
+            const credentials = await getStoredCredentials(userName); // Retrieve stored credentials from DB
             if (!credentials) {
               console.error("No credentials found for user:", userName);
               return res.status(404).send("User credentials not found");
             }
 
-            const { tenant_id, client_id, client_secret, category, coid } = credentials;
-            const accessToken = await getAccessToken(tenant_id, client_id, client_secret);
+            const { tenant_id, client_id, client_secret, category, coid } =
+              credentials;
+            const accessToken = await getAccessToken(
+              tenant_id,
+              client_id,
+              client_secret
+            );
 
-            const files = await getFilesFromOneDrive(accessToken, graphBaseUrl, userName);
+            const files = await getFilesFromOneDrive(
+              accessToken,
+              graphBaseUrl,
+              userName
+            );
 
             const documents = [];
             for (const file of files) {
               if (file) {
                 try {
-                  const content = await fetchFileContentFromOneDrive(file, accessToken);
+                  const content = await fetchFileContentFromOneDrive(
+                    file,
+                    accessToken
+                  );
                   console.log(`Processed file: ${file.name} => ${content}`);
                   if (content) {
                     documents.push({
@@ -2170,14 +2343,19 @@ exports.oneDriveWebhook = async (req, res) => {
                       content,
                       category: category,
                       image: null,
-                      description: `File from OneDrive: ${file.name}`
-                    })
+                      description: `File from OneDrive: ${file.name}`,
+                    });
                   }
                 } catch (error) {
-                  console.error(`Error processing file: ${file.name}`, error.message);
+                  console.error(
+                    `Error processing file: ${file.name}`,
+                    error.message
+                  );
                 }
               } else {
-                console.error.log(`Skipping unsupported or folder: ${file.name}`);
+                console.error.log(
+                  `Skipping unsupported or folder: ${file.name}`
+                );
               }
             }
 
@@ -2185,7 +2363,7 @@ exports.oneDriveWebhook = async (req, res) => {
               await pushToAzureSearch(documents, coid);
             } else {
               return res.status(200).json({
-                message: "No valid files to sync."
+                message: "No valid files to sync.",
               });
             }
           } catch (error) {
@@ -2218,29 +2396,36 @@ exports.syncMySQLDatabase = async (req, res) => {
     json_properties, // For JSON fields
     xml_paths, // For XML fields
     name,
-    type
+    type,
   } = req.body;
 
   if (!name || !type) {
     return res.status(400).json({
-      message: "Data source name and type must be set."
+      message: "Data source name and type must be set.",
     });
   }
 
-  const checkExistOfMySQLConfigResponse = await checkExistOfMySQLConfig(db_host, db_database, table_name, req.coid);
+  const checkExistOfMySQLConfigResponse = await checkExistOfMySQLConfig(
+    db_host,
+    db_database,
+    table_name,
+    req.coid
+  );
 
-  if (checkExistOfMySQLConfigResponse === "MySQL configuration is not existed") {
+  if (
+    checkExistOfMySQLConfigResponse === "MySQL configuration is not existed"
+  ) {
     const esNewCategoryResponse = await axios.post(
       "https://es-services.onrender.com/api/v1/category",
       {
         name: name,
-        type: type
+        type: type,
       },
       {
         headers: {
           Authorization: req.headers["authorization"],
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       }
     );
 
@@ -2256,7 +2441,7 @@ exports.syncMySQLDatabase = async (req, res) => {
       field_type: field_type,
       json_properties: json_properties,
       xml_paths: xml_paths,
-      category: newCategoryId
+      category: newCategoryId,
     });
 
     const fileData = result.data;
@@ -2280,19 +2465,19 @@ exports.syncMySQLDatabase = async (req, res) => {
       return res.status(200).json({
         message: "Sync Successful",
         data: syncResponse,
-        mysql: registerMySQLConnectionRes
+        mysql: registerMySQLConnectionRes,
       });
     } else {
       return res.status(200).json({
-        message: "No valid files to sync."
-      })
+        message: "No valid files to sync.",
+      });
     }
   } else {
     return res.status(200).json({
-      data: "This MySQL server had been already configured."
+      data: "This MySQL server had been already configured.",
     });
   }
-}
+};
 
 exports.syncPostgreSQLDatabase = async (req, res) => {
   const {
@@ -2306,18 +2491,27 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
     json_properties, // For JSON fields
     xml_paths, // For XML fields
     name,
-    type
+    type,
   } = req.body;
 
   if (!name || !type) {
     return res.status(400).json({
-      message: "Data source name and type must be set."
+      message: "Data source name and type must be set.",
     });
   }
 
-  const checkExistOfPostgreSQLConfigResponse = await checkExistOfPostgreSQLConfig(db_host, db_database, table_name, req.coid);
+  const checkExistOfPostgreSQLConfigResponse =
+    await checkExistOfPostgreSQLConfig(
+      db_host,
+      db_database,
+      table_name,
+      req.coid
+    );
 
-  if (checkExistOfPostgreSQLConfigResponse === "PostgreSQL configuration is not existed") {
+  if (
+    checkExistOfPostgreSQLConfigResponse ===
+    "PostgreSQL configuration is not existed"
+  ) {
     const esNewCategoryResponse = await axios.post(
       "https://es-services.onrender.com/api/v1/category",
       {
@@ -2327,8 +2521,8 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
       {
         headers: {
           Authorization: req.headers["authorization"],
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       }
     );
 
@@ -2344,7 +2538,7 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
       field_type: field_type,
       json_properties: json_properties,
       xml_paths: xml_paths,
-      category: newCategoryId
+      category: newCategoryId,
     });
 
     const fileData = result.data;
@@ -2360,7 +2554,7 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
       field_type: field_type,
       category: newCategoryId,
       coid: req.coid,
-      lastProcessedId: lastProcessedId
+      lastProcessedId: lastProcessedId,
     });
 
     if (fileData.length > 0) {
@@ -2368,19 +2562,19 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
       return res.status(200).json({
         messag: "Sync Successful",
         data: syncResponse,
-        postgresql: registerPostgreSQLConnectionRes
+        postgresql: registerPostgreSQLConnectionRes,
       });
     } else {
       return res.status(200).json({
-        message: "No valid files to sync."
+        message: "No valid files to sync.",
       });
     }
   } else {
     return res.status(200).json({
-      data: "This PostgreSQL server had been already configured."
+      data: "This PostgreSQL server had been already configured.",
     });
   }
-}
+};
 
 exports.syncMongoData = async (req, res) => {
   const {
@@ -2398,30 +2592,38 @@ exports.syncMongoData = async (req, res) => {
   // Ensure that the required parameters are sent in the request
   if (!mongodb_uri || !db_name || !collection_name) {
     return res.status(400).json({
-      message: 'MongoDB URI, database name, and collection name must be provided.'
+      message:
+        "MongoDB URI, database name, and collection name must be provided.",
     });
   }
 
   if (!name || !type) {
     return res.status(400).json({
-      message: "Data source name and type must be set."
+      message: "Data source name and type must be set.",
     });
   }
 
-  const checkExistofMongoDBConfigResponse = await checkExistOfMongoDBConfig(mongodb_uri, db_name, collection_name, req.coid);
+  const checkExistofMongoDBConfigResponse = await checkExistOfMongoDBConfig(
+    mongodb_uri,
+    db_name,
+    collection_name,
+    req.coid
+  );
 
-  if (checkExistofMongoDBConfigResponse === "MongoDB configuration does not exist") {
+  if (
+    checkExistofMongoDBConfigResponse === "MongoDB configuration does not exist"
+  ) {
     const esNewCategoryResponse = await axios.post(
       "https://es-services.onrender.com/api/v1/category",
       {
         name: name,
-        type: type
+        type: type,
       },
       {
         headers: {
           Authorization: req.headers["authorization"],
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       }
     );
 
@@ -2435,7 +2637,7 @@ exports.syncMongoData = async (req, res) => {
       field_type: field_type,
       json_properties: json_properties,
       xml_paths: xml_paths,
-      category: newCategoryId
+      category: newCategoryId,
     });
 
     const fileData = result.data;
@@ -2447,7 +2649,7 @@ exports.syncMongoData = async (req, res) => {
       field_name: field_name,
       field_type: field_type,
       category: newCategoryId,
-      coid: req.coid
+      coid: req.coid,
     });
 
     if (fileData.length > 0) {
@@ -2455,19 +2657,19 @@ exports.syncMongoData = async (req, res) => {
       return res.status(200).json({
         message: "Sync Successful",
         data: syncResponse,
-        mongodb: registerMongoDBConnectionRes
+        mongodb: registerMongoDBConnectionRes,
       });
     } else {
       return res.status(200).json({
-        message: "No valid files to sync."
-      })
+        message: "No valid files to sync.",
+      });
     }
   } else {
     return res.status(200).json({
-      data: "This MongoDB server had been already configured."
+      data: "This MongoDB server had been already configured.",
     });
   }
-}
+};
 
 exports.syncMSSQLDatabase = async (req, res) => {
   const {
@@ -2490,9 +2692,17 @@ exports.syncMSSQLDatabase = async (req, res) => {
     });
   }
 
-  const checkExistOfMSSQLConfigResponse = await checkExistOfMSSQLConfig(db_host, db_database, table_name, field_name, req.coid);
+  const checkExistOfMSSQLConfigResponse = await checkExistOfMSSQLConfig(
+    db_host,
+    db_database,
+    table_name,
+    field_name,
+    req.coid
+  );
 
-  if (checkExistOfMSSQLConfigResponse === "MSSQL configuration does not exist") {
+  if (
+    checkExistOfMSSQLConfigResponse === "MSSQL configuration does not exist"
+  ) {
     try {
       // Step 1: Create a new category in Elastic Search
       const esNewCategoryResponse = await axios.post(
@@ -2505,11 +2715,12 @@ exports.syncMSSQLDatabase = async (req, res) => {
           headers: {
             Authorization: req.headers["authorization"],
             "Content-Type": "application/json",
-          }
+          },
         }
       );
 
-      const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      const newCategoryId =
+        esNewCategoryResponse.data.elasticsearchResponse._id;
 
       // Step 2: Fetch and process data from MSSQL
       const result = await fetchAndProcessFieldContent({
@@ -2537,7 +2748,7 @@ exports.syncMSSQLDatabase = async (req, res) => {
         field_name: field_name,
         field_type: field_type,
         category: newCategoryId,
-        coid: req.coid
+        coid: req.coid,
       });
 
       // Step 4: Push processed data to Azure Search
@@ -2562,19 +2773,13 @@ exports.syncMSSQLDatabase = async (req, res) => {
     }
   } else {
     return res.status(200).json({
-      data: "This MSSQL server had been already configured."
+      data: "This MSSQL server had been already configured.",
     });
   }
-}
+};
 
 exports.syncSharePointOnlineDatabase = async (req, res) => {
-  const {
-    tenant_id,
-    client_id,
-    client_secret,
-    name,
-    type,
-  } = req.body;
+  const { tenant_id, client_id, client_secret, name, type } = req.body;
 
   if (!tenant_id || !client_id || !client_secret || !name || !type) {
     return res.status(400).json({ error: "Missing required parameters" });
@@ -2585,39 +2790,40 @@ exports.syncSharePointOnlineDatabase = async (req, res) => {
   const checkExistOfSharePointConfigResponse = "configuration is not existed";
 
   if (checkExistOfSharePointConfigResponse === "configuration is not existed") {
-
     // Main Function to sync data
     try {
       // Step 2: Generate Access Token
       const tokenDoc = await getAccessTokenOfSharePoint(client_id);
 
-      const { accessToken, refreshToken, tenantId, clientId, clientSecret } = tokenDoc;
+      const { accessToken, refreshToken, tenantId, clientId, clientSecret } =
+        tokenDoc;
 
       // // Step 3: Fetch all accessible SharePoint sites
       const sites = await fetchAllAccessibleSites(accessToken);
 
       return res.status(200).json({
-        data: sites
-      })
+        data: sites,
+      });
     } catch (error) {
       console.error("Error syncing SharePoint Data: ", error.message);
       return res.status(500).json({
-        error: "Failed to sync SharePoint Data"
-      })
+        error: "Failed to sync SharePoint Data",
+      });
     }
-  } else if (checkExistOfSharePointConfigResponse === "configuration is already existed") {
+  } else if (
+    checkExistOfSharePointConfigResponse === "configuration is already existed"
+  ) {
     return res.status(200).json({
-      data: "This SharePoint is already configured."
+      data: "This SharePoint is already configured.",
     });
   }
-
-}
+};
 
 exports.sharePointGetAccessToken = async (req, res) => {
   const { code, state } = req.query;
   if (!code || !state) {
     return res.status(400).json({
-      error: "Missing authorization code or state"
+      error: "Missing authorization code or state",
     });
   }
 
@@ -2628,13 +2834,16 @@ exports.sharePointGetAccessToken = async (req, res) => {
 
   // Exchange code for tokens
   try {
-    const response = await axios.post(tokenEndpoint, new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      redirect_uri: "http://localhost:3000/api/v1/sharepoint/callback",
-      grant_type: "authorization_code",
-    }));
+    const response = await axios.post(
+      tokenEndpoint,
+      new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: "http://localhost:3000/api/v1/sharepoint/callback",
+        grant_type: "authorization_code",
+      })
+    );
 
     const { access_token, refresh_token } = response.data;
 
@@ -2650,20 +2859,18 @@ exports.sharePointGetAccessToken = async (req, res) => {
       userId
     );
 
-    res.send("Authentication successful! You can sync with your SharePoint now.");
+    res.send(
+      "Authentication successful! You can sync with your SharePoint now."
+    );
   } catch (error) {
     console.error("Error exchanging authorization code:", error.message);
     res.status(500).json({ error: "Failed to exchange authorization code" });
   }
-}
+};
 
 exports.syncWasabi = async (req, res) => {
-  const {
-    bucket_name,
-    folder_path,
-    access_key_id,
-    secret_access_key
-  } = req.body;
+  const { bucket_name, folder_path, access_key_id, secret_access_key } =
+    req.body;
 
   // Initialize S3 client for Wasabi
   const s3Client = new S3Client({
@@ -2683,8 +2890,8 @@ exports.syncWasabi = async (req, res) => {
   const command = new ListObjectsV2Command(params);
 
   const bucketCommand = new HeadBucketCommand({
-    Bucket: bucket_name
-  })
+    Bucket: bucket_name,
+  });
 
   try {
     // Check if the bucket exists
@@ -2746,12 +2953,12 @@ exports.syncWasabi = async (req, res) => {
       message: "Failed to sync Wasabi data",
     });
   }
-}
+};
 
 exports.syncDataFromDatasources = async (req, res) => {
   if (!req.query.type) {
     return res.status(400).json({
-      message: "Data source type must be set."
+      message: "Data source type must be set.",
     });
   }
 
@@ -2765,13 +2972,13 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/sync-google-drive",
           {
             ...req.body,
-            type: "Google Drive"
+            type: "Google Drive",
           },
           {
             headers: {
               Authorization: req.headers["authorization"],
-              "Content-Type": "application/json"
-            }
+              "Content-Type": "application/json",
+            },
           }
         );
         break;
@@ -2781,13 +2988,13 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/sync-one-drive",
           {
             ...req.body,
-            type: "OneDrive"
+            type: "OneDrive",
           },
           {
             headers: {
               Authorization: req.headers["authorization"],
-              "Content-Type": "application/json"
-            }
+              "Content-Type": "application/json",
+            },
           }
         );
         break;
@@ -2797,13 +3004,13 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/mysql",
           {
             ...req.body,
-            type: "SQL Database"
+            type: "SQL Database",
           },
           {
             headers: {
               Authorization: req.headers["authorization"],
-              "Content-Type": "application/json"
-            }
+              "Content-Type": "application/json",
+            },
           }
         );
         break;
@@ -2813,13 +3020,13 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/postgres",
           {
             ...req.body,
-            type: "Postgres"
+            type: "Postgres",
           },
           {
             headers: {
               Authorization: req.headers["authorization"],
-              "Content-Type": "application/json"
-            }
+              "Content-Type": "application/json",
+            },
           }
         );
         break;
@@ -2829,13 +3036,13 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/mongodb",
           {
             ...req.body,
-            type: "NoSQL Database"
+            type: "NoSQL Database",
           },
           {
             headers: {
               Authorization: req.headers["authorization"],
-              "Content-Type": "application/json"
-            }
+              "Content-Type": "application/json",
+            },
           }
         );
         break;
@@ -2845,33 +3052,32 @@ exports.syncDataFromDatasources = async (req, res) => {
           "https://es-services.onrender.com/api/v1/mssql",
           {
             ...req.body,
-            type: "MSSQL"
+            type: "MSSQL",
           },
           {
             headers: {
               Authorization: req.headers["authorization"],
-              "Content-Type": "application/json"
-            }
+              "Content-Type": "application/json",
+            },
           }
         );
         break;
 
       default:
         return res.status(400).json({
-          message: "Unsupported data source type."
+          message: "Unsupported data source type.",
         });
     }
 
     return res.status(200).json({
       message: "Sync Successful",
-      data: dataSourceSyncResponse.data
+      data: dataSourceSyncResponse.data,
     });
-
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       message: "Sync failed",
-      error: error.message || error
+      error: error.message || error,
     });
   }
 };
