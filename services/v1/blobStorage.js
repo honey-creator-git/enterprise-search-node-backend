@@ -16,6 +16,19 @@ async function uploadFileToBlob(fileBuffer, fileName) {
   return blobClient.url; // Return the URL to access the file
 }
 
+// Function to upload file to Azure Blob Storage for Google Drive
+async function uploadFileToBlobForGoogleDrive(fileBuffer, fileName, contentLength) {
+    try {
+      const blobClient = containerClient.getBlockBlobClient(fileName);
+      await blobClient.upload(fileBuffer, contentLength); // Specify content length
+      return blobClient.url; // Return the URL to access the file
+    } catch (error) {
+      console.error("Failed to upload file to Azure Blob Storage:", error);
+      throw new Error("Failed to upload file");
+    }
+  }
+
 module.exports = {
   uploadFileToBlob,
+  uploadFileToBlobForGoogleDrive,
 };

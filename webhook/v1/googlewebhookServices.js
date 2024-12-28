@@ -6,7 +6,10 @@ const mammoth = require("mammoth");
 const pdf = require("pdf-parse");
 const pptParser = require("ppt-parser");
 const axios = require("axios");
-const { uploadFileToBlob } = require("../../services/v1/blobStorage");
+const {
+  uploadFileToBlob,
+  uploadFileToBlobForGoogleDrive,
+} = require("../../services/v1/blobStorage");
 
 async function checkExistOfGoogleDriveConfig(client_id, coid) {
   try {
@@ -225,15 +228,30 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
   const drive = google.drive({ version: "v3", auth });
 
   try {
+    // Fetch file metadata
+    const metadata = await fetchFileMetadata(file.id, drive);
+    const contentLength = metadata.size; // File size from metadata
+
+    if (!contentLength) {
+      console.error(`Skipping file ${file.name}: File size is missing.`);
+      return null;
+    }
+
+    // Fetch file content
+    const fileBuffer = await fetchFileBufferFromGoogleDrive(file.id, drive);
+
+    // Upload to Azure Blob Storage
+    const fileUrl = await uploadFileToBlobForGoogleDrive(
+      fileBuffer,
+      file.name,
+      contentLength
+    );
+
     const file = await drive.files.get({
       fileId,
       fields: "id, name, mimeType, modifiedTime",
     });
-
     const content = await fetchFileContentByType(file.data, drive);
-    const fileBuffer = await fetchFileBufferFromGoogleDrive(file.id, drive);
-    const fileUrl = await uploadFileToBlob(fileBuffer, file.name); // Upload to Azure Blob Storage
-
     if (content !== "Unsupported file type") {
       return {
         id: file.data.id,
@@ -550,9 +568,26 @@ async function fetchAllFileContents(files, categoryId, drive) {
   const fileData = [];
   for (const file of files) {
     try {
-      const content = await fetchFileContentByType(file, drive);
+      // Fetch file metadata
+      const metadata = await fetchFileMetadata(file.id, drive);
+      const contentLength = metadata.size; // File size from metadata
+
+      if (!contentLength) {
+        console.error(`Skipping file ${file.name}: File size is missing.`);
+        continue;
+      }
+
+      // Fetch file content
       const fileBuffer = await fetchFileBufferFromGoogleDrive(file.id, drive);
-      const fileUrl = await uploadFileToBlob(fileBuffer, file.name); // Upload to Azure Blob Storage
+
+      // Upload to Azure Blob Storage
+      const fileUrl = await uploadFileToBlobForGoogleDrive(
+        fileBuffer,
+        file.name,
+        contentLength
+      );
+
+      const content = await fetchFileContentByType(file, drive);
       if (content !== "Unsupported file type") {
         console.log("File Name => ", file.name);
         console.log("File Content => ", content);
@@ -588,6 +623,19 @@ async function fetchFileBufferFromGoogleDrive(fileId, drive) {
   } catch (error) {
     console.error("Failed to fetch file buffer from Google Drive:", error);
     throw new Error("Failed to fetch file buffer");
+  }
+}
+
+async function fetchFileMetadata(fileId, drive) {
+  try {
+    const response = await drive.files.get({
+      fileId: fileId,
+      fields: "id, name, mimeType, size",
+    });
+    return response.data; // Includes file size
+  } catch (error) {
+    console.error("Failed to fetch file metadata from Google Drive:", error);
+    throw new Error("Failed to fetch file metadata");
   }
 }
 
