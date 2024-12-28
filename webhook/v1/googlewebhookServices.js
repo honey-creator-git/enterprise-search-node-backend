@@ -571,6 +571,7 @@ async function fetchAllFileContents(files, categoryId, drive) {
       // Fetch file metadata
       const metadata = await fetchFileMetadata(file.id, drive);
       const contentLength = metadata.size; // File size from metadata
+      const mimeType = metadata.mimeType; // MIME type from metadata
 
       // Debugging logs
       console.log(`File Name: ${file.name}`);
@@ -589,7 +590,8 @@ async function fetchAllFileContents(files, categoryId, drive) {
       const fileUrl = await uploadFileToBlobForGoogleDrive(
         fileBuffer,
         file.name,
-        contentLength
+        contentLength,
+        mimeType
       );
 
       const content = await fetchFileContentByType(file, drive);

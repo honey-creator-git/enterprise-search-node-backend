@@ -20,7 +20,8 @@ async function uploadFileToBlob(fileBuffer, fileName) {
 async function uploadFileToBlobForGoogleDrive(
   fileBuffer,
   fileName,
-  contentLength
+  contentLength,
+  mimeType
 ) {
   try {
     // Validate contentLength
@@ -31,7 +32,16 @@ async function uploadFileToBlobForGoogleDrive(
     }
 
     const blobClient = containerClient.getBlockBlobClient(fileName);
-    await blobClient.upload(fileBuffer, contentLength); // Specify content length
+
+    // Set HTTP headers with the correct Content-Type
+    const options = {
+      blobHTTPHeaders: {
+        blobContentType: mimeType, // Set MIME type to allow preview in the browser
+      },
+    };
+
+    // Upload the file with metadata
+    await blobClient.upload(fileBuffer, contentLength, options); // Specify content length
     return blobClient.url; // Return the URL to access the file
   } catch (error) {
     console.error("Failed to upload file to Azure Blob Storage:", error);
