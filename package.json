@@ -26,7 +26,6 @@
     "googleapis": "^144.0.0",
     "http": "^0.0.1-security",
     "jsonwebtoken": "^9.0.2",
-    "libreoffice-convert": "^1.6.0",
     "mammoth": "^1.8.0",
     "mongodb": "^6.11.0",
     "mssql": "^11.0.1",
@@ -40,6 +39,7 @@
     "stream": "^0.0.3",
     "textract": "^2.5.0",
     "ws": "^8.18.0",
+    "xls-to-json-lc": "^0.3.4",
     "xlsx": "^0.18.5",
     "xml2js": "^0.6.2"
   }
