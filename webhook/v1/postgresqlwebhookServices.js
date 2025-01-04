@@ -530,7 +530,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
-            id: `${row.id}_${index}`,
+            id: `pg_${row.id}_${index}`,
             content: chunk,
             title: config.title || `PG Row ID ${row.id}`,
             description: config.description || "No description",

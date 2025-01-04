@@ -430,7 +430,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
-            id: `${row.id}_${index}`,
+            id: `mysql_${row.id}_${index}`,
             content: chunk,
             title: config.title || `MySQL Row ID ${row.id}`,
             description: config.description || "No description",
