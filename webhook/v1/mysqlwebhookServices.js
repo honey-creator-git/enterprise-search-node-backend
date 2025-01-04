@@ -6,7 +6,6 @@ const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const fs = require("fs"); // To read the SSL certificate file
 const textract = require("textract");
-const ExcelJS = require("exceljs");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
