@@ -392,7 +392,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
 
       try {
         const fileBuffer = row.field_value;
-        const fileName = `mysql_file_${row.id}`;
+        const fileName = `mysql_${config.database}_${config.table_name}_file_${row.id}`;
 
         if (config.field_type.toLowerCase() === "blob") {
           // Detect MIME type
@@ -430,7 +430,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
-            id: `mysql_${row.id}_${index}`,
+            id: `mysql_${config.database}_${config.table_name}_${row.id}_${index}`,
             content: chunk,
             title: config.title || `MySQL Row ID ${row.id}`,
             description: config.description || "No description",

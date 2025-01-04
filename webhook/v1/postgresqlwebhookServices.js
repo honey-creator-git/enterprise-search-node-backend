@@ -496,7 +496,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
 
       try {
         const fileBuffer = row.field_value;
-        const fileName = `pg_file_${row.id}`;
+        const fileName = `pg_${config.database}_${config.table_name}_file_${row.id}`;
 
         if (config.field_type.toLowerCase() === "blob") {
           // Process BLOB Field
@@ -530,7 +530,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
-            id: `pg_${row.id}_${index}`,
+            id: `pg_${config.database}_${config.table_name}_${row.id}_${index}`,
             content: chunk,
             title: config.title || `PG Row ID ${row.id}`,
             description: config.description || "No description",
