@@ -131,6 +131,14 @@ async function extractTextFromPptxBuffer(buffer) {
   });
 }
 
+function splitLargeText(content, maxChunkSize = 30000) {
+  const chunks = [];
+  for (let i = 0; i < content.length; i += maxChunkSize) {
+    chunks.push(content.substring(i, i + maxChunkSize));
+  }
+  return chunks;
+}
+
 async function processFieldContent(
   content,
   fieldType,
@@ -339,6 +347,7 @@ async function saveMySQLConnection(
     throw new Error("Failed to save mysql connection to ElasticSearch");
   }
 }
+
 async function fetchAndProcessFieldContentOfMySQL(config) {
   const connection = await mysql.createConnection({
     host: config.host,
@@ -412,14 +421,17 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
       }
 
       if (processedContent) {
-        documents.push({
-          id: row.id.toString(),
-          content: processedContent,
-          title: config.title || `Row ID ${row.id}`, // Use provided title or fallback
-          description: config.description || "No description provided",
-          image: config.image || null,
-          category: config.category,
-          fileUrl: fileUrl,
+        const chunks = splitLargeText(processedContent);
+        chunks.forEach((chunk, index) => {
+          documents.push({
+            id: `${row.id}_${index}`,
+            content: chunk,
+            title: config.title || `Row ID ${row.id}`,
+            description: config.description || "No description",
+            image: config.image || null,
+            category: config.category,
+            fileUrl: fileUrl,
+          });
         });
       }
     }
