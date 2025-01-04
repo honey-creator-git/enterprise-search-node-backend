@@ -392,9 +392,9 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
 
       try {
         const fileBuffer = row.field_value;
-        const fileName = `file_${row.id}`;
+        const fileName = `mysql_file_${row.id}`;
 
-        if (config.field_type === "BLOB" || config.field_type === "blob") {
+        if (config.field_type.toLowerCase() === "blob") {
           // Detect MIME type
           const { extractedText, mimeType } = await processBlobField(
             fileBuffer
@@ -432,7 +432,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
           documents.push({
             id: `${row.id}_${index}`,
             content: chunk,
-            title: config.title || `Row ID ${row.id}`,
+            title: config.title || `MySQL Row ID ${row.id}`,
             description: config.description || "No description",
             image: config.image || null,
             category: config.category,

@@ -1,8 +1,9 @@
 const client = require("./../../config/elasticsearch");
+const { uploadFileToBlob } = require("../../services/v1/blobStorage");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
-const XLSX = require("xlsx");
+const textract = require("textract");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -74,24 +75,10 @@ async function extractTextFromTxt(content) {
 }
 
 async function extractTextFromXlsx(buffer) {
-  try {
-    const workbook = XLSX.read(buffer, { type: "buffer" }); // Read the XLSX file buffer
-    let textContent = "";
-
-    workbook.SheetNames.forEach((sheetName) => {
-      const sheet = workbook.Sheets[sheetName]; // Access each sheet
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert sheet to array of rows
-
-      rows.forEach((row) => {
-        textContent += row.join(" ") + "\n"; // Combine columns into a single line and add a newline
-      });
-    });
-
-    return textContent.trim(); // Return combined text content
-  } catch (error) {
-    console.error("Error extracting text from XLSX:", error);
-    throw new Error("Failed to extract text from XLSX");
-  }
+  const xlsx = require("xlsx");
+  const workbook = xlsx.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return xlsx.utils.sheet_to_csv(sheet);
 }
 
 async function extractTextFromHtml(htmlContent) {
@@ -272,6 +259,145 @@ async function checkExistOfPostgreSQLConfig(host, database, table_name, coid) {
   }
 }
 
+async function extractTextFromHtmlBuffer(buffer) {
+  const cheerio = require("cheerio");
+  const $ = cheerio.load(buffer.toString("utf-8"));
+  return $("body").text().trim();
+}
+
+// Extract Text from RTF (Placeholder)
+async function extractTextFromRtf(buffer) {
+  return buffer.toString("utf-8");
+}
+
+async function extractTextFromXmlBuffer(buffer) {
+  const xml2js = require("xml2js");
+  const parser = new xml2js.Parser();
+  const result = await parser.parseStringPromise(buffer.toString("utf-8"));
+  return JSON.stringify(result);
+}
+
+async function extractTextFromCsvBuffer(buffer) {
+  return buffer.toString("utf-8");
+}
+
+async function extractTextFromPptxBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    textract.fromBufferWithMime(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      buffer,
+      (err, text) => {
+        if (err) {
+          console.error("Error extracting PPTX:", err);
+          return reject(err);
+        }
+        resolve(text || "");
+      }
+    );
+  });
+}
+
+function splitLargeText(content, maxChunkSize = 30000) {
+  const chunks = [];
+  for (let i = 0; i < content.length; i += maxChunkSize) {
+    chunks.push(content.substring(i, i + maxChunkSize));
+  }
+  return chunks;
+}
+
+// Detect MIME Type from Buffer
+async function detectMimeType(buffer) {
+  const { fileTypeFromBuffer } = await import("file-type"); // Dynamic import
+  const fileTypeResult = await fileTypeFromBuffer(buffer); // Correct function
+
+  // Fallback: Inspect buffer for HTML tags
+  const content = buffer.toString("utf-8").trim();
+  if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
+    return "text/html";
+  }
+
+  // Check if fileTypeFromBuffer fails or returns application/octet-stream
+  if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
+    // Try reading the buffer as UTF-8 plain text
+    const textContent = buffer.toString("utf-8");
+
+    // Simple heuristic: If the buffer decodes without issues, it's likely plain text
+    if (/^[\x00-\x7F]*$/.test(textContent)) {
+      return "text/plain";
+    }
+  }
+
+  return fileTypeResult ? fileTypeResult.mime : "application/octet-stream";
+}
+
+// Process BLOB field for text extraction
+async function processBlobField(fileBuffer) {
+  let extractedText = "";
+  const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
+
+  console.log(`Mime Type PG => ${mimeType}`);
+
+  try {
+    switch (mimeType) {
+      case "application/pdf":
+        extractedText = await extractTextFromPdf(fileBuffer);
+        break;
+
+      case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": // DOCX
+      case "application/msword": // DOC
+        extractedText = await extractTextFromDocx(fileBuffer);
+        break;
+
+      case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // XLSX
+      case "application/vnd.ms-excel": // XLS
+      case "application/x-cfb":
+        extractedText = await extractTextFromXlsx(fileBuffer);
+        break;
+
+      case "application/vnd.ms-powerpoint": // PPT
+      case "application/vnd.openxmlformats-officedocument.presentationml.presentation": // PPTX
+        extractedText = await extractTextFromPptxBuffer(fileBuffer);
+        break;
+
+      case "text/csv":
+        extractedText = await extractTextFromCsvBuffer(fileBuffer);
+        break;
+
+      case "application/xml":
+      case "text/xml":
+        extractedText = await extractTextFromXmlBuffer(fileBuffer);
+        break;
+
+      case "application/rtf": // RTF
+        extractedText = await extractTextFromRtf(fileBuffer);
+        break;
+
+      case "text/plain":
+        extractedText = fileBuffer.toString("utf-8"); // Direct text extraction for .txt
+        break;
+
+      case "application/json":
+        extractedText = JSON.stringify(
+          JSON.parse(fileBuffer.toString("utf-8")),
+          null,
+          2
+        );
+        break;
+
+      case "text/html":
+        extractedText = await extractTextFromHtmlBuffer(fileBuffer);
+        break;
+
+      default:
+        console.log("Unsupported BLOB type, uploading without extraction.");
+    }
+  } catch (error) {
+    console.error("Error extracting text from BLOB:", error.message);
+  }
+
+  return { extractedText, mimeType };
+}
+
 async function fetchAndProcessFieldContentOfPostgreSQL(config) {
   const { Client } = require("pg");
   const client = new Client({
@@ -366,14 +492,32 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
 
     for (const row of res.rows) {
       let processedContent;
+      let fileUrl = "";
 
       try {
-        processedContent = await processFieldContent(
-          row.field_value,
-          config.field_type,
-          config.json_properties,
-          config.xml_paths
-        );
+        const fileBuffer = row.field_value;
+        const fileName = `pg_file_${row.id}`;
+
+        if (config.field_type.toLowerCase() === "blob") {
+          // Process BLOB Field
+          const { extractedText, mimeType } = await processBlobField(
+            fileBuffer
+          );
+
+          // Upload to Azure Blob Storage
+          fileUrl = await uploadFileToBlob(fileBuffer, fileName, mimeType);
+          console.log("File URL => ", fileUrl);
+
+          processedContent = extractedText;
+          console.log("Extracted text from buffer => ", processedContent);
+        } else {
+          processedContent = await processFieldContent(
+            row.field_value,
+            config.field_type,
+            config.json_properties,
+            config.xml_paths
+          );
+        }
       } catch (error) {
         console.error(
           `Failed to process content for row ID ${row.id}`,
@@ -383,14 +527,17 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
       }
 
       if (processedContent) {
-        documents.push({
-          id: row.id.toString(),
-          content: processedContent,
-          title: config.title || `Row ID ${row.id}`,
-          description: config.description || "No description provided",
-          image: config.image || null,
-          category: config.category,
-          fileUrl: "",
+        const chunks = splitLargeText(processedContent);
+        chunks.forEach((chunk, index) => {
+          documents.push({
+            id: `${row.id}_${index}`,
+            content: chunk,
+            title: config.title || `PG Row ID ${row.id}`,
+            description: config.description || "No description",
+            image: config.image || null,
+            category: config.category,
+            fileUrl: fileUrl,
+          });
         });
       }
     }
