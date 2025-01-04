@@ -83,17 +83,6 @@ async function extractTextFromXlsx(buffer) {
   return xlsx.utils.sheet_to_csv(sheet);
 }
 
-async function extractTextFromOldXls(buffer, mimeType) {
-  return new Promise((resolve, reject) => {
-    textract.fromBufferWithMime(mimeType, buffer, (err, text) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(text || "");
-    });
-  });
-}
-
 async function extractTextFromHtml(htmlContent) {
   try {
     const $ = cheerio.load(htmlContent); // Load the HTML content
@@ -225,11 +214,8 @@ async function processBlobField(fileBuffer) {
 
       case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // XLSX
       case "application/vnd.ms-excel": // XLS
-        extractedText = await extractTextFromXlsx(fileBuffer);
-        break;
-
       case "application/x-cfb":
-        extractedText = await extractTextFromOldXls(fileBuffer, mimeType);
+        extractedText = await extractTextFromXlsx(fileBuffer);
         break;
 
       case "application/vnd.ms-powerpoint": // PPT
