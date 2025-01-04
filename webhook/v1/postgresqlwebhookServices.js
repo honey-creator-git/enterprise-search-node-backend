@@ -202,7 +202,7 @@ async function savePostgreSQLConnection(
     });
 
     console.log(
-      `MySQL Connection details saved successfully in index: ${indexName}`
+      `PostgreSQL Connection details saved successfully in index: ${indexName}`
     );
     return response;
   } catch (error) {
