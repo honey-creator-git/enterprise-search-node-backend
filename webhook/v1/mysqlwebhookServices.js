@@ -4,8 +4,8 @@ const mysql = require("mysql2/promise");
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
-const XLSX = require("xlsx");
 const fs = require("fs"); // To read the SSL certificate file
+const textract = require("textract");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -77,24 +77,10 @@ async function extractTextFromTxt(content) {
 }
 
 async function extractTextFromXlsx(buffer) {
-  try {
-    const workbook = XLSX.read(buffer, { type: "buffer" }); // Read the XLSX file buffer
-    let textContent = "";
-
-    workbook.SheetNames.forEach((sheetName) => {
-      const sheet = workbook.Sheets[sheetName]; // Access each sheet
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert sheet to array of rows
-
-      rows.forEach((row) => {
-        textContent += row.join(" ") + "\n"; // Combine columns into a single line and add a newline
-      });
-    });
-
-    return textContent.trim(); // Return combined text content
-  } catch (error) {
-    console.error("Error extracting text from XLSX:", error);
-    throw new Error("Failed to extract text from XLSX");
-  }
+  const xlsx = require("xlsx");
+  const workbook = xlsx.read(buffer, { type: "buffer" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return xlsx.utils.sheet_to_csv(sheet);
 }
 
 async function extractTextFromHtml(htmlContent) {
@@ -108,8 +94,47 @@ async function extractTextFromHtml(htmlContent) {
 }
 
 // Extract Text from RTF (Placeholder)
-async function extractTextFromRTF(buffer) {
+async function extractTextFromRtf(buffer) {
+  const rtfParser = require("rtf-parser");
+  return new Promise((resolve, reject) => {
+    rtfParser.string(buffer.toString("utf-8"), (err, doc) => {
+      if (err) reject(err);
+      resolve(doc.content || "");
+    });
+  });
+}
+
+async function extractTextFromXmlBuffer(buffer) {
+  const xml2js = require("xml2js");
+  const parser = new xml2js.Parser();
+  const result = await parser.parseStringPromise(buffer.toString("utf-8"));
+  return JSON.stringify(result);
+}
+
+async function extractTextFromHtmlBuffer(buffer) {
+  const cheerio = require("cheerio");
+  const $ = cheerio.load(buffer.toString("utf-8"));
+  return $("body").text().trim();
+}
+
+async function extractTextFromCsvBuffer(buffer) {
   return buffer.toString("utf-8");
+}
+
+async function extractTextFromPptxBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    textract.fromBufferWithMime(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      buffer,
+      (err, text) => {
+        if (err) {
+          console.error("Error extracting PPTX:", err);
+          return reject(err);
+        }
+        resolve(text || "");
+      }
+    );
+  });
 }
 
 async function processFieldContent(
@@ -170,7 +195,7 @@ async function detectMimeType(buffer) {
 }
 
 // Process BLOB field for text extraction
-async function processBlobField(fileBuffer, fileName) {
+async function processBlobField(fileBuffer) {
   let extractedText = "";
   const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
 
@@ -181,23 +206,51 @@ async function processBlobField(fileBuffer, fileName) {
       case "application/pdf":
         extractedText = await extractTextFromPdf(fileBuffer);
         break;
-      case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-      case "application/msword":
+
+      case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": // DOCX
+      case "application/msword": // DOC
         extractedText = await extractTextFromDocx(fileBuffer);
         break;
-      case "text/csv":
-        extractedText = await extractTextFromCsv(fileBuffer);
+
+      case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // XLSX
+      case "application/vnd.ms-excel": // XLS
+        extractedText = await extractTextFromXlsx(fileBuffer);
         break;
+
+      case "application/vnd.ms-powerpoint": // PPT
+      case "application/vnd.openxmlformats-officedocument.presentationml.presentation": // PPTX
+        extractedText = await extractTextFromPptxBuffer(fileBuffer);
+        break;
+
+      case "text/csv":
+        extractedText = await extractTextFromCsvBuffer(fileBuffer);
+        break;
+
       case "application/xml":
       case "text/xml":
-        extractedText = await extractTextFromXml(fileBuffer);
+        extractedText = await extractTextFromXmlBuffer(fileBuffer);
         break;
-      case "application/rtf":
-        extractedText = await extractTextFromRTF(fileBuffer);
+
+      case "application/rtf": // RTF
+        extractedText = await extractTextFromRtf(fileBuffer);
         break;
+
       case "text/plain":
-        extractedText = await extractTextFromRTF(fileBuffer); // Extract plain text
+        extractedText = fileBuffer.toString("utf-8"); // Direct text extraction for .txt
         break;
+
+      case "application/json":
+        extractedText = JSON.stringify(
+          JSON.parse(fileBuffer.toString("utf-8")),
+          null,
+          2
+        );
+        break;
+
+      case "text/html":
+        extractedText = await extractTextFromHtmlBuffer(fileBuffer);
+        break;
+
       default:
         console.log("Unsupported BLOB type, uploading without extraction.");
     }
@@ -334,8 +387,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
         if (config.field_type === "BLOB" || config.field_type === "blob") {
           // Detect MIME type
           const { extractedText, mimeType } = await processBlobField(
-            fileBuffer,
-            fileName
+            fileBuffer
           );
 
           // Upload file to Azure Blob Storage
