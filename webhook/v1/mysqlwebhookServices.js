@@ -6,7 +6,7 @@ const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const fs = require("fs"); // To read the SSL certificate file
 const textract = require("textract");
-const xlsToJson = require("xls-to-json-lc");
+const ExcelJS = require("exceljs");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -84,24 +84,19 @@ async function extractTextFromXlsx(buffer) {
   return xlsx.utils.sheet_to_csv(sheet);
 }
 
-async function extractTextFromXls(buffer) {
-  return new Promise((resolve, reject) => {
-    xlsToJson(
-      {
-        input: buffer,
-        output: null, // null to return JSON directly
-      },
-      (err, result) => {
-        if (err) {
-          return reject(err);
-        }
-        const text = result
-          .map((row) => Object.values(row).join(", "))
-          .join("\n");
-        resolve(text);
-      }
-    );
+async function extractTextFromExcel(buffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  let extractedText = "";
+
+  workbook.eachSheet((sheet, id) => {
+    sheet.eachRow((row) => {
+      extractedText += row.values.join(", ") + "\n";
+    });
   });
+
+  return extractedText;
 }
 
 async function extractTextFromHtml(htmlContent) {
@@ -239,7 +234,7 @@ async function processBlobField(fileBuffer) {
         break;
 
       case "application/x-cfb":
-        extractedText = await extractTextFromXls(fileBuffer);
+        extractedText = await extractTextFromExcel(fileBuffer);
         break;
 
       case "application/vnd.ms-powerpoint": // PPT
