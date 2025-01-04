@@ -95,13 +95,7 @@ async function extractTextFromHtml(htmlContent) {
 
 // Extract Text from RTF (Placeholder)
 async function extractTextFromRtf(buffer) {
-  const rtfParser = require("rtf-parser");
-  return new Promise((resolve, reject) => {
-    rtfParser.string(buffer.toString("utf-8"), (err, doc) => {
-      if (err) reject(err);
-      resolve(doc.content || "");
-    });
-  });
+  return buffer.toString("utf-8");
 }
 
 async function extractTextFromXmlBuffer(buffer) {
