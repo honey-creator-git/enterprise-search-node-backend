@@ -6,6 +6,7 @@ const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const fs = require("fs"); // To read the SSL certificate file
 const textract = require("textract");
+const libre = require("libreoffice-convert"); // For conversion
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -128,6 +129,19 @@ async function extractTextFromPptxBuffer(buffer) {
         resolve(text || "");
       }
     );
+  });
+}
+
+// Convert XLS to XLSX
+async function convertXlsToXlsx(buffer) {
+  return new Promise((resolve, reject) => {
+    libre.convert(buffer, ".xlsx", undefined, (err, result) => {
+      if (err) {
+        console.error("Conversion Error:", err.message);
+        return reject(err);
+      }
+      resolve(result);
+    });
   });
 }
 
@@ -385,8 +399,22 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
             fileBuffer
           );
 
-          // Upload file to Azure Blob Storage
-          fileUrl = await uploadFileToBlob(fileBuffer, fileName, mimeType);
+          if (mimeType === "application/x-cfb") {
+            console.log("CFB detected, converting to XLSX...");
+
+            const convertedBuffer = await convertXlsToXlsx(fileBuffer);
+            const convertedFileName = fileName.replace(".xls", ".xlsx");
+
+            // Upload converted XLSX
+            fileUrl = await uploadFileToBlob(
+              convertedBuffer,
+              convertedFileName,
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            );
+          } else {
+            // Upload file to Azure Blob Storage
+            fileUrl = await uploadFileToBlob(fileBuffer, fileName, mimeType);
+          }
 
           console.log("File URL => ", fileUrl);
 

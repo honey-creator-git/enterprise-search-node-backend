@@ -26,6 +26,7 @@
     "googleapis": "^144.0.0",
     "http": "^0.0.1-security",
     "jsonwebtoken": "^9.0.2",
+    "libreoffice-convert": "^1.6.0",
     "mammoth": "^1.8.0",
     "mongodb": "^6.11.0",
     "mssql": "^11.0.1",
