@@ -182,6 +182,12 @@ async function detectMimeType(buffer) {
   const { fileTypeFromBuffer } = await import("file-type"); // Dynamic import
   const fileTypeResult = await fileTypeFromBuffer(buffer); // Correct function
 
+  // Fallback: Inspect buffer for HTML tags
+  const content = buffer.toString("utf-8").trim();
+  if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
+    return "text/html";
+  }
+
   // Check if fileTypeFromBuffer fails or returns application/octet-stream
   if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
     // Try reading the buffer as UTF-8 plain text
