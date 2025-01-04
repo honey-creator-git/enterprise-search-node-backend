@@ -17,7 +17,6 @@ function generatePreviewUrl(fileUrl, mimeType) {
     mimeType ===
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || // XLSX
     mimeType === "application/vnd.ms-excel" || // XLS
-    mimeType === "application/rtf" || // RTF
     mimeType ===
       "application/vnd.openxmlformats-officedocument.presentationml.presentation" // PPTX
   ) {
