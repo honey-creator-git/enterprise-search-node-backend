@@ -6,6 +6,7 @@ const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const fs = require("fs"); // To read the SSL certificate file
 const textract = require("textract");
+const libre = require("libreoffice-convert");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -74,6 +75,17 @@ async function extractTextFromJson(content, properties) {
 // Text Extraction Functions
 async function extractTextFromTxt(content) {
   return content;
+}
+
+async function convertXlsToXlsx(buffer) {
+  return new Promise((resolve, reject) => {
+    libre.convert(buffer, ".xlsx", undefined, (err, result) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(result);
+    });
+  });
 }
 
 async function extractTextFromXlsx(buffer) {
@@ -215,6 +227,12 @@ async function processBlobField(fileBuffer) {
       case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // XLSX
       case "application/vnd.ms-excel": // XLS
         extractedText = await extractTextFromXlsx(fileBuffer);
+        break;
+
+      case "application/x-cfb":
+        console.log("CFB detected, converting to XLSX...");
+        const convertedBuffer = await convertXlsToXlsx(fileBuffer);
+        extractedText = await extractTextFromXlsx(convertedBuffer);
         break;
 
       case "application/vnd.ms-powerpoint": // PPT
