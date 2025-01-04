@@ -84,19 +84,15 @@ async function extractTextFromXlsx(buffer) {
   return xlsx.utils.sheet_to_csv(sheet);
 }
 
-async function extractTextFromExcel(buffer) {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
-
-  let extractedText = "";
-
-  workbook.eachSheet((sheet, id) => {
-    sheet.eachRow((row) => {
-      extractedText += row.values.join(", ") + "\n";
+async function extractTextFromOldXls(buffer, mimeType) {
+  return new Promise((resolve, reject) => {
+    textract.fromBufferWithMime(mimeType, buffer, (err, text) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(text || "");
     });
   });
-
-  return extractedText;
 }
 
 async function extractTextFromHtml(htmlContent) {
@@ -234,7 +230,7 @@ async function processBlobField(fileBuffer) {
         break;
 
       case "application/x-cfb":
-        extractedText = await extractTextFromExcel(fileBuffer);
+        extractedText = await extractTextFromOldXls(fileBuffer, mimeType);
         break;
 
       case "application/vnd.ms-powerpoint": // PPT
