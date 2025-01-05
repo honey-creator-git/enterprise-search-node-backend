@@ -334,14 +334,11 @@ async function fetchAndProcessFieldContent(config) {
     await connection.query(checkTriggerQuery);
 
     // Step 3: Fetch Data from the Table
-    const query = `SELECT [${config.field_name}] AS field_value, [Id] FROM [dbo].[${config.table_name}] WHERE [Id] > @lastProcessedId
-            ORDER BY [Id] ASC`;
+    const query = `SELECT [${config.field_name}] AS field_value, [Id] FROM [dbo].[${config.table_name}] ORDER BY [Id] ASC`;
     console.log("Database Configuration:", dbConfig);
     console.log("Executing Query:", query);
 
-    const result = await connection.query(query, {
-      lastProcessedId: config.lastProcessedId || 0,
-    });
+    const result = await connection.query(query);
     const rows = result.recordset;
 
     if (!rows.length) {
