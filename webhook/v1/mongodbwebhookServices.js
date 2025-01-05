@@ -466,7 +466,7 @@ async function fetchDataFromMongoDB(config) {
 
     // Return the data
     return {
-      data,
+      data: data,
     };
   } catch (error) {
     console.error("Error syncing MongoDB to Azure ");
