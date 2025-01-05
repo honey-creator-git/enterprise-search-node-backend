@@ -130,6 +130,14 @@ async function extractTextFromHtmlBuffer(buffer) {
   return $("body").text().trim();
 }
 
+function splitLargeText(content, maxChunkSize = 30000) {
+  const chunks = [];
+  for (let i = 0; i < content.length; i += maxChunkSize) {
+    chunks.push(content.substring(i, i + maxChunkSize));
+  }
+  return chunks;
+}
+
 async function processFieldContent(
   content,
   fieldType,
