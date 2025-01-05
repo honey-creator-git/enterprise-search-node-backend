@@ -206,7 +206,7 @@ async function processBlobField(fileBuffer) {
   let extractedText = "";
   const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
 
-  console.log(`Mime Type PG => ${mimeType}`);
+  console.log(`Mime Type MSSQL => ${mimeType}`);
 
   try {
     switch (mimeType) {
