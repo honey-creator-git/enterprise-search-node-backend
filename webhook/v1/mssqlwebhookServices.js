@@ -286,23 +286,43 @@ async function fetchAndProcessFieldContent(config) {
   try {
     // Step 1: Check and Create Change Log Table
     const changeLogTable = `${config.table_name}_ChangeLog`;
+
+    // Dynamically detect the primary key field
+    const primaryKeyQuery = `
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+        AND TABLE_NAME = '${config.table_name}';
+    `;
+
+    const primaryKeyResult = await connection.query(primaryKeyQuery);
+    let primaryKeyField = primaryKeyResult.recordset[0]?.COLUMN_NAME;
+
+    if (!primaryKeyField) {
+      console.log(
+        `No primary key detected. Using ROW_NUMBER as a fallback for table: ${config.table_name}`
+      );
+      primaryKeyField =
+        "ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS RowNumber";
+    }
+
     const checkChangeLogTableQuery = `
-            IF NOT EXISTS (
-                SELECT * FROM INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_NAME = '${changeLogTable}'
-            )
-            BEGIN
-                CREATE TABLE dbo.[${changeLogTable}] (
-                    LogID INT IDENTITY PRIMARY KEY,
-                    ActionType NVARCHAR(50),
-                    RowID INT,
-                    ChangedField NVARCHAR(255),
-                    OldValue NVARCHAR(MAX),
-                    NewValue NVARCHAR(MAX),
-                    ChangeTime DATETIME DEFAULT GETDATE()
-                );
-            END
-        `;
+        IF NOT EXISTS (
+            SELECT * FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_NAME = '${changeLogTable}'
+        )
+        BEGIN
+            CREATE TABLE dbo.[${changeLogTable}] (
+                LogID INT IDENTITY PRIMARY KEY,
+                ActionType NVARCHAR(50),
+                RowID NVARCHAR(MAX), -- Store dynamic row identifier
+                ChangedField NVARCHAR(255),
+                OldValue NVARCHAR(MAX),
+                NewValue NVARCHAR(MAX),
+                ChangeTime DATETIME DEFAULT GETDATE()
+            );
+        END
+    `;
     await connection.query(checkChangeLogTableQuery);
 
     // Step 2: Check and Create Trigger
@@ -327,13 +347,13 @@ async function fetchAndProcessFieldContent(config) {
                                     WHEN EXISTS (SELECT * FROM deleted) THEN ''UPDATE''
                                     ELSE ''INSERT''
                                 END,
-                                i.Id,
+                                CAST(i.${primaryKeyField} AS NVARCHAR(MAX)), -- Use dynamic primary key field
                                 ''${config.field_name}'',
-                                d.${config.field_name},
-                                i.${config.field_name},
+                                CAST(d.${config.field_name} AS NVARCHAR(MAX)),
+                                CAST(i.${config.field_name} AS NVARCHAR(MAX)),
                                 GETDATE()
                             FROM inserted i
-                            LEFT JOIN deleted d ON i.Id = d.Id;
+                            LEFT JOIN deleted d ON i.${primaryKeyField} = d.${primaryKeyField};
                         END
                     END
                 ');
@@ -342,7 +362,11 @@ async function fetchAndProcessFieldContent(config) {
     await connection.query(checkTriggerQuery);
 
     // Step 3: Fetch Data from the Table
-    const query = `SELECT [${config.field_name}] AS field_value, [Id] FROM [dbo].[${config.table_name}] ORDER BY [Id] ASC`;
+    const query = `
+        SELECT ${primaryKeyField} AS RowID, [${config.field_name}] AS field_value
+        FROM [dbo].[${config.table_name}]
+        ORDER BY ${primaryKeyField} ASC
+    `;
     console.log("Database Configuration:", dbConfig);
     console.log("Executing Query:", query);
 
@@ -365,7 +389,7 @@ async function fetchAndProcessFieldContent(config) {
 
       try {
         const fileBuffer = row.field_value;
-        const fileName = `mssql_${config.database}_${config.table_name}_file_${row.Id}`;
+        const fileName = `mssql_${config.db_database}_${config.table_name}_file_${row.Id}`;
         console.log("Config Field Type => ", config.field_type);
 
         if (config.field_type.toLowerCase() === "blob") {
