@@ -389,7 +389,7 @@ async function fetchAndProcessFieldContent(config) {
 
       try {
         const fileBuffer = row.field_value;
-        const fileName = `mssql_${config.db_database}_${config.table_name}_file_${row.Id}`;
+        const fileName = `mssql_${config.db_database}_${config.table_name}_file_${row.RowID}`;
         console.log("Config Field Type => ", config.field_type);
 
         if (config.field_type.toLowerCase() === "blob") {
@@ -416,7 +416,7 @@ async function fetchAndProcessFieldContent(config) {
         }
       } catch (error) {
         console.error(
-          `Failed to process content for row ID ${row.Id}:`,
+          `Failed to process content for row ID ${row.RowID}:`,
           error.message
         );
         continue;
@@ -427,9 +427,9 @@ async function fetchAndProcessFieldContent(config) {
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
-            id: `mssql_${config.database}_${config.table_name}_${row.Id}_${index}`,
+            id: `mssql_${config.database}_${config.table_name}_${row.RowID}_${index}`,
             content: chunk,
-            title: config.title || `MSSQL Row ID ${row.Id}`,
+            title: config.title || `MSSQL Row ID ${row.RowID}`,
             description: config.description || "No description provided",
             image: config.image || null,
             category: config.category,
