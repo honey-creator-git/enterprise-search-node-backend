@@ -380,7 +380,6 @@ async function fetchDataFromMongoDB(config) {
     // Fetch all documents from the collection (optionally apply filters)
     const query = {}; // Empty empty to fetch all documents. Add filters here if needed.
     const cursor = collection.find(query);
-
     const documents = await cursor.toArray();
     const files = await bucket.find().toArray();
 
@@ -460,16 +459,17 @@ async function fetchDataFromMongoDB(config) {
           });
         }
       }
-
-      console.log(`Fetched ${data.length} documents from the collection.`);
     }
 
+    console.log(`Fetched ${data.length} documents from the collection.`);
+
     // Return the data
-    return {
-      data: data,
-    };
+    return { data };
   } catch (error) {
-    console.error("Error syncing MongoDB to Azure ");
+    console.error("Error syncing MongoDB to Azure:", error.message);
+    return { data: [] }; // <-- Return an empty array if error occurs
+  } finally {
+    await client.close();
   }
 }
 
