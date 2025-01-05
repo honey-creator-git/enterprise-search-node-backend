@@ -1,4 +1,4 @@
-const { MongoClient } = require("mongodb");
+const { MongoClient, GridFSBucket } = require("mongodb");
 const client = require("./../../config/elasticsearch");
 const { uploadFileToBlob } = require("../../services/v1/blobStorage");
 const mammoth = require("mammoth");
