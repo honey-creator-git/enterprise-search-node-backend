@@ -2241,10 +2241,8 @@ exports.syncOneDrive = async (req, res) => {
         for (const file of files) {
           if (file) {
             try {
-              const content = await fetchFileContentFromOneDrive(
-                file,
-                accessToken
-              );
+              const { content, fileSize, uploadedAt } =
+                await fetchFileContentFromOneDrive(file, accessToken);
               if (content) {
                 const fileBuffer = await fetchFileBufferFromOneDrive(
                   file,
