@@ -465,6 +465,8 @@ async function pushToAzureSearch(documents, coid) {
         image: doc.image,
         category: doc.category,
         fileUrl: doc.fileUrl, // Add the file URL here
+        fileSize: doc.fileSize,
+        uploadedAt: doc.uploadedAt,
       })),
     };
 
