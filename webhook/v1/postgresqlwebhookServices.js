@@ -542,6 +542,8 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
             image: config.image || null,
             category: config.category,
             fileUrl: fileUrl,
+            fileSize: row.file_size,
+            uploadedAt: row.uploaded_at,
           });
         });
       }

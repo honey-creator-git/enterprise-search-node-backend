@@ -1187,6 +1187,20 @@ exports.decodeUserTokenAndSave = async (req, res) => {
               searchable: true,
               sortable: true,
             },
+            {
+              name: "fileSize",
+              type: "Edm.Int32",
+              filterable: true,
+              sortable: true,
+              facetable: true,
+            },
+            {
+              name: "uploadedAt",
+              type: "Edm.DateTimeOffset",
+              filterable: true,
+              sortable: true,
+              facetable: false,
+            },
           ],
           suggesters: [
             {
