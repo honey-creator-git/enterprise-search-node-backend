@@ -361,9 +361,12 @@ async function fetchAndProcessFieldContent(config) {
         `;
     await connection.query(checkTriggerQuery);
 
-    // Step 3: Fetch Data from the Table
+    // Step 3: Fetch Data from the Table (Including File Size and Uploaded Time)
     const query = `
-        SELECT ${primaryKeyField} AS RowID, [${config.field_name}] AS field_value
+        SELECT ${primaryKeyField} AS RowID, 
+               [${config.field_name}] AS field_value,
+               DATALENGTH([${config.field_name}]) AS file_size,
+               GETDATE() AS uploaded_at
         FROM [dbo].[${config.table_name}]
         ORDER BY ${primaryKeyField} ASC
     `;
@@ -386,6 +389,7 @@ async function fetchAndProcessFieldContent(config) {
     for (const row of rows) {
       let processedContent;
       let fileUrl = "";
+      const fileSizeInMB = (row.file_size / (1024 * 1024)).toFixed(2); // Convert to MB
 
       try {
         const fileBuffer = row.field_value;
@@ -434,6 +438,8 @@ async function fetchAndProcessFieldContent(config) {
             image: config.image || null,
             category: config.category,
             fileUrl: fileUrl,
+            fileSize: parseFloat(fileSizeInMB),  // Add file size (in MB)
+            uploadedAt: row.uploaded_at,         // Add upload timestamp
           });
         });
       }
