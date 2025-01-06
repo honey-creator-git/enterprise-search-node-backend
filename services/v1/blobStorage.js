@@ -95,7 +95,26 @@ async function uploadFileToBlobForGoogleDrive(
   }
 }
 
+async function getContainerStats() {
+  let totalSize = 0;
+  let fileCount = 0;
+
+  for await (const blob of containerClient.listBlobsFlat()) {
+    totalSize += blob.properties.contentLength || 0;
+    fileCount++;
+  }
+
+  console.log(`Total Files: ${fileCount}`);
+  console.log(`Total Size: ${(totalSize / (1024 * 1024)).toFixed(2)} MB`);
+
+  return {
+    fileCount,
+    totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
+  };
+}
+
 module.exports = {
   uploadFileToBlob,
   uploadFileToBlobForGoogleDrive,
+  getContainerStats,
 };

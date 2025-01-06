@@ -11,4 +11,11 @@ router.post(
   documentController.syncDataFromDatasources
 );
 
+router.get(
+  "/container-stats",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getStorageContainerSizeAndCount
+);
+
 module.exports = router;

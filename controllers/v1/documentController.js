@@ -66,7 +66,10 @@ const {
   listFilesInBucket,
   processFileContent,
 } = require("../../webhook/v1/wasabiwebhookServices");
-const { uploadFileToBlob } = require("../../services/v1/blobStorage");
+const {
+  uploadFileToBlob,
+  getContainerStats,
+} = require("../../services/v1/blobStorage");
 const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
@@ -3115,4 +3118,12 @@ exports.syncDataFromDatasources = async (req, res) => {
       error: error.message || error,
     });
   }
+};
+
+exports.getStorageContainerSizeAndCount = async (req, res) => {
+  const containerStats = await getContainerStats();
+  return res.status(200).json({
+    count: containerStats.fileCount,
+    size: containerStats.totalSizeMB,
+  });
 };
