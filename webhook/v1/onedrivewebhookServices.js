@@ -12,39 +12,48 @@ const parseCsv = require("csv-parser");
 async function extractTextFromPdf(buffer) {
   try {
     const data = await pdfParse(buffer);
+    if (!data.text || data.text.trim() === "") {
+      console.error(`No text found in PDF.`);
+      return "";
+    }
     return data.text; // Extracted text from the PDF file
   } catch (error) {
     console.error("Error extracting text from PDF:", error);
-    throw new Error("Failed to extract text from PDF");
+    return ""; // Return empty string instead of throwing error
   }
 }
+
 async function extractTextFromDoc(buffer) {
   try {
     const { value } = await mammoth.extractRawText({ buffer });
-    return value; // Extracted text from the DOC file
+    if (!value || value.trim() === "") {
+      console.error(`No text found in DOC.`);
+      return "";
+    }
+    return value;
   } catch (error) {
     console.error("Error extracting text from DOC:", error);
-    throw new Error("Failed to extract text from DOC");
+    return "";
   }
 }
 
 async function extractTextFromDocx(buffer) {
   try {
     const { value } = await mammoth.extractRawText({ buffer });
-    return value; // Extracted text from the DOCX file
+    return value || "";
   } catch (error) {
     console.error("Error extracting text from DOCX:", error);
-    throw new Error("Failed to extract text from DOCX");
+    return "";
   }
 }
 
 async function extractTextFromHtml(htmlContent) {
   try {
     const $ = cheerio.load(htmlContent);
-    return $("body").text(); // Extract the text inside the body tag
+    return $("body").text().trim() || "No text found";
   } catch (error) {
     console.error("Error extracting text from HTML:", error);
-    throw new Error("Failed to extract text from HTML");
+    return "";
   }
 }
 
@@ -55,25 +64,26 @@ async function extractTextFromXlsx(buffer) {
 
     workbook.SheetNames.forEach((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
-      const jsonSheetData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert sheet to array of rows
+      const jsonSheetData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
       jsonSheetData.forEach((row) => {
-        textContent += row.join(" ") + "\n"; // Join columns and add line breaks between rows
+        textContent += row.join(" ") + "\n";
       });
     });
 
-    return textContent; // Return combined text content from the spreadsheet
+    return textContent || "No text found";
   } catch (error) {
     console.error("Error extracting text from XLSX:", error);
-    throw new Error("Failed to extract text from XLSX");
+    return "";
   }
 }
 
 async function extractTextFromTxt(textContent) {
   try {
-    return textContent; // Return the raw text content of the TXT file
+    return textContent.trim() || "No text found";
   } catch (error) {
     console.error("Error extracting text from TXT:", error);
-    throw new Error("Failed to extract text from TXT");
+    return "";
   }
 }
 
@@ -88,64 +98,69 @@ async function extractTextFromCsv(data) {
     readable
       .pipe(parseCsv())
       .on("data", (row) => results.push(row))
-      .on("end", () => resolve(JSON.stringify(results, null, 2)))
-      .on("error", (err) => reject(err));
+      .on("end", () => resolve(results.map((row) => row.join(" ")).join("\n")))
+      .on("error", (err) => {
+        console.error("Error parsing CSV:", err);
+        resolve("");
+      });
   });
 }
 
 async function extractTextFromXml(data) {
   try {
     const result = await parseStringPromise(data);
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result, null, 2) || "No text found";
   } catch (error) {
     console.error("Failed to parse XML:", error.message);
-    throw error;
+    return "";
   }
 }
 
 async function extractTextFromRtx(data) {
   return new Promise((resolve, reject) => {
     RTFParser.parseString(data, (err, doc) => {
-      if (err) return reject(err);
+      if (err) {
+        console.error("Error extracting text from RTF:", err);
+        return resolve("");
+      }
       let text = "";
       doc.content.forEach((block) => {
         if (block.type === "text") {
           text += block.value;
         }
       });
-      resolve(text);
+      resolve(text || "No text found");
     });
   });
 }
 
 async function extractTextFromPpt(buffer) {
-  const result = await pptParser.parse(buffer);
-  return result.text || "No text found";
+  try {
+    const result = await pptParser.parse(buffer);
+    return result.text || "No text found";
+  } catch (error) {
+    console.error("Error extracting text from PPT:", error);
+    return "";
+  }
 }
 
 async function extractTextFromPptx(buffer) {
-  const result = await pptParser.parse(buffer);
-  return result.text || "No text found";
+  try {
+    const result = await pptParser.parse(buffer);
+    return result.text || "No text found";
+  } catch (error) {
+    console.error("Error extracting text from PPTX:", error);
+    return "";
+  }
 }
 
 async function extractTextFromJson(data) {
   try {
-    // Parse the JSON data if it is in string format
     const jsonData = typeof data === "string" ? JSON.parse(data) : data;
-
-    // Convert JSON into a readable format (e.g., stringified)
-    const formattedText = JSON.stringify(jsonData, null, 2); // Pretty-print with 2 spaces
-
-    // Optionally: Extract specific fields if needed
-    // Example: Collect all keys and values into a single string
-    // const extractedFields = Object.entries(jsonData)
-    //     .map(([key, value]) => `${key}: ${value}`)
-    //     .join("\n");
-
-    return formattedText; // Or return extractedFields if needed
+    return JSON.stringify(jsonData, null, 2) || "No text found";
   } catch (error) {
     console.error("Error processing JSON content:", error.message);
-    throw new Error("Failed to process JSON content");
+    return "";
   }
 }
 
@@ -405,43 +420,68 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
 
     const fileType = file.name.split(".").pop().toLowerCase(); // Extract file extension and make it lowercase
 
+    const responseType = ["txt", "json", "html", "csv", "xml", "rtx"].includes(
+      fileType
+    )
+      ? "text"
+      : "arraybuffer";
+
     const response = await axios.get(file["@microsoft.graph.downloadUrl"], {
       headers: { Authorization: `Bearer ${accessToken}` },
-      responseType: ["txt", "json", "html", "csv", "xml", "rtx"].includes(
-        fileType
-      )
-        ? "text"
-        : "arraybuffer",
+      responseType: responseType,
     });
 
+    // Check for empty response
+    if (
+      !response.data ||
+      (responseType === "arraybuffer" && response.data.byteLength === 0)
+    ) {
+      console.error(`Empty response for file: ${file.name}`);
+      return {
+        content: "",
+        fileSize: 0,
+        uploadedAt: file.createdDateTime || new Date().toISOString(),
+      };
+    }
+
     let extractedText;
-    if (fileType === "txt") {
-      extractedText = extractTextFromTxt(response.data);
-    } else if (fileType === "json") {
-      extractedText = extractTextFromJson(response.data);
-    } else if (fileType === "html") {
-      extractedText = extractTextFromHtml(response.data);
-    } else if (fileType === "csv") {
-      extractedText = extractTextFromCsv(response.data);
-    } else if (fileType === "xml") {
-      extractedText = extractTextFromXml(response.data);
-    } else if (fileType === "pdf") {
-      extractedText = extractTextFromPdf(Buffer.from(response.data, "binary"));
-    } else if (fileType === "doc") {
-      extractedText = extractTextFromDoc(Buffer.from(response.data, "binary"));
-    } else if (fileType === "docx") {
-      extractedText = extractTextFromDocx(Buffer.from(response.data, "binary"));
-    } else if (fileType === "xlsx") {
-      extractedText = extractTextFromXlsx(Buffer.from(response.data, "binary"));
-    } else if (fileType === "rtx") {
-      extractedText = extractTextFromRtx(response.data);
-    } else if (fileType === "ppt") {
-      extractedText = extractTextFromPpt(Buffer.from(response.data, "binary"));
-    } else if (fileType === "pptx") {
-      extractedText = extractTextFromPptx(Buffer.from(response.data, "binary"));
-    } else {
-      console.log(`Unsupported file type: ${fileType}`);
-      return {};  // Return empty object if unsupported
+    const buffer = Buffer.from(response.data, "binary");
+
+    // Extract text based on file type
+    try {
+      if (fileType === "txt") {
+        extractedText = extractTextFromTxt(response.data);
+      } else if (fileType === "json") {
+        extractedText = extractTextFromJson(response.data);
+      } else if (fileType === "html") {
+        extractedText = extractTextFromHtml(response.data);
+      } else if (fileType === "csv") {
+        extractedText = await extractTextFromCsv(response.data);
+      } else if (fileType === "xml") {
+        extractedText = await extractTextFromXml(response.data);
+      } else if (fileType === "pdf") {
+        extractedText = await extractTextFromPdf(buffer);
+      } else if (fileType === "doc") {
+        extractedText = await extractTextFromDoc(buffer);
+      } else if (fileType === "docx") {
+        extractedText = await extractTextFromDocx(buffer);
+      } else if (fileType === "xlsx") {
+        extractedText = await extractTextFromXlsx(buffer);
+      } else if (fileType === "rtx") {
+        extractedText = await extractTextFromRtx(response.data);
+      } else if (fileType === "ppt") {
+        extractedText = await extractTextFromPpt(buffer);
+      } else if (fileType === "pptx") {
+        extractedText = await extractTextFromPptx(buffer);
+      } else {
+        console.log(`Unsupported file type: ${fileType}`);
+      }
+    } catch (extractionError) {
+      console.error(
+        `Text extraction failed for ${file.name}:`,
+        extractionError.message
+      );
+      extractedText = "";
     }
 
     // Convert file size to MB and capture uploaded time
