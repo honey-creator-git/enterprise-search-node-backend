@@ -879,6 +879,8 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       if (results.length < pageSize) break; // Stop if fewer documents are returned
     }
 
+    console.log("Total Search Length ===> ", allDocuments.length);
+
     res.status(200).json({
       message: `Fetched documents from Azure AI Service ${indexName} with rerankerScore >= ${rerankerThreshold}.`,
       total: allDocuments.length,
