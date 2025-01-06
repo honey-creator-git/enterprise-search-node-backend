@@ -2349,10 +2349,10 @@ exports.oneDriveWebhook = async (req, res) => {
             for (const file of files) {
               if (file) {
                 try {
-                  const content = await fetchFileContentFromOneDrive(
-                    file,
-                    accessToken
-                  );
+                  const fileData =
+                    (await fetchFileContentFromOneDrive(file, accessToken)) ||
+                    {};
+                  const { content, fileSize, uploadedAt } = fileData;
                   console.log(`Processed file: ${file.name} => ${content}`);
                   if (content) {
                     const fileBuffer = await fetchFileBufferFromOneDrive(
@@ -2377,6 +2377,8 @@ exports.oneDriveWebhook = async (req, res) => {
                       image: null,
                       description: `File from OneDrive: ${file.name}`,
                       fileUrl: fileUrl,
+                      fileSize: fileSize, // Store file size in MB
+                      uploadedAt: new Date(uploadedAt).toISOString(), // Store created or modified timestamp
                     });
                   }
                 } catch (error) {
