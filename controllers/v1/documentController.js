@@ -3122,7 +3122,7 @@ exports.syncDataFromDatasources = async (req, res) => {
 
 // Function to get data source type count
 async function getDataSourceTypeCount(coid) {
-  const indexName = `datasourcetypes_${coid.toLowerCase()}`;
+  const indexName = `datasources_${coid.toLowerCase()}`;
 
   try {
     const response = await client.count({
