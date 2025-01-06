@@ -451,7 +451,7 @@ async function fetchDataFromMongoDB(config) {
           data.push({
             id: document._id.toString(),
             content: processedContent,
-            title: config.title || `Row ID ${document._id}`, // Use provided title or fallback
+            title: config.title || `MongoDB Row ID ${document._id}`, // Use provided title or fallback
             description: config.description || "No description provided",
             image: config.image || null,
             category: config.category,
