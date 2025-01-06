@@ -1189,7 +1189,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
             },
             {
               name: "fileSize",
-              type: "Edm.Int32",
+              type: "Edm.Double",
               filterable: true,
               sortable: true,
               facetable: true,
