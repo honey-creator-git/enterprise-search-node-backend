@@ -2243,6 +2243,10 @@ exports.syncOneDrive = async (req, res) => {
             try {
               const { content, fileSize, uploadedAt } =
                 await fetchFileContentFromOneDrive(file, accessToken);
+
+              console.log("File Size ===> ", fileSize);
+              console.log("Uploaded At ====> ", uploadedAt);
+
               if (content) {
                 const fileBuffer = await fetchFileBufferFromOneDrive(
                   file,

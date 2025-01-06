@@ -385,17 +385,6 @@ async function getFilesFromOneDrive(accessToken, graphBaseUrl, userName) {
           userName
         ); // Fetch files from the folder
         files = files.concat(folderFiles);
-      } else if (folder.file) {
-        // For individual files, capture size and timestamps
-        files.push({
-          id: folder.id,
-          name: folder.name,
-          size: folder.size,
-          createdDateTime: folder.createdDateTime,
-          lastModifiedDateTime: folder.lastModifiedDateTime,
-          mimeType: folder.file.mimeType,
-          downloadUrl: folder["@microsoft.graph.downloadUrl"],
-        });
       }
     }
 
