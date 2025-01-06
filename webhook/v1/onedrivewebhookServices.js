@@ -441,7 +441,7 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
       extractedText = extractTextFromPptx(Buffer.from(response.data, "binary"));
     } else {
       console.log(`Unsupported file type: ${fileType}`);
-      return null; // Skip unsupported files
+      return {};  // Return empty object if unsupported
     }
 
     // Convert file size to MB and capture uploaded time
