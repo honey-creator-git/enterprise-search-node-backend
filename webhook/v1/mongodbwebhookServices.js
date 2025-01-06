@@ -413,6 +413,9 @@ async function fetchDataFromMongoDB(config) {
         }
 
         if (processedContent) {
+          const fileSizeInMB = (file.length / (1024 * 1024)).toFixed(2); // Convert size to MB
+          const uploadedAt = file.uploadDate || new Date(); // Fallback to current timestamp if missing
+
           const chunks = splitLargeText(processedContent);
           chunks.forEach((chunk, index) => {
             data.push({
@@ -423,6 +426,8 @@ async function fetchDataFromMongoDB(config) {
               image: config.image || null,
               category: config.category,
               fileUrl: fileUrl,
+              fileSize: parseFloat(fileSizeInMB), // Add file size (in MB)
+              uploadedAt: uploadedAt, // Add uploadedAt timestamp
             });
           });
         }
@@ -456,6 +461,8 @@ async function fetchDataFromMongoDB(config) {
             image: config.image || null,
             category: config.category,
             fileUrl: "",
+            fileSize: null, // Not applicable for non-GridFS documents
+            uploadedAt: document.uploadDate || new Date(), // Use uploadDate or current time
           });
         }
       }
