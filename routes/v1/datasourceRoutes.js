@@ -18,4 +18,11 @@ router.get(
   documentController.getStorageContainerSizeAndCount
 );
 
+router.get(
+  "/datasource-counts",
+  setRoleMiddleware,
+  checkAdminAccess,
+  documentController.getDataSourceTypeCount
+);
+
 module.exports = router;

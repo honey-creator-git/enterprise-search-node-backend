@@ -3127,3 +3127,34 @@ exports.getStorageContainerSizeAndCount = async (req, res) => {
     size: containerStats.totalSizeMB,
   });
 };
+
+// Function to get data source type count
+async function getDataSourceTypeCount(coid) {
+  const indexName = `datasourcetypes_${coid.toLowerCase()}`;
+
+  try {
+    const response = await client.count({
+      index: indexName,
+    });
+
+    return response.count;
+  } catch (error) {
+    console.error("Error fetching data source type count:", error.message);
+    throw new Error("Failed to fetch data source type count.");
+  }
+}
+
+exports.getDataSourceTypeCount = async (req, res) => {
+  try {
+    const coid = req.coid;
+
+    const count = await getDataSourceTypeCount(coid);
+    return res.status(200).json({
+      message: "Data source type count fetched successfully",
+      count,
+    });
+  } catch (error) {
+    console.error("Error in controller:", error.message);
+    return res.status(500).json({ error: "Failed to fetch data source types" });
+  }
+};
