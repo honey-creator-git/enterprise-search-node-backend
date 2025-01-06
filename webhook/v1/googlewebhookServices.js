@@ -230,7 +230,8 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
     // Fetch file metadata
     const metadata = await fetchFileMetadata(file.id, drive);
     const contentLength = metadata.size; // File size from metadata
-    const mimeType = metadata.mimeType; // MIME type from metadata
+    const mimeType = metadata.mimeType; // MIME type from metadata    
+    const uploadedAt = metadata.createdTime || metadata.modifiedTime; // Use created or modified time
 
     // Debugging logs
     console.log(`File nam: ${file.name}`);
@@ -266,6 +267,8 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
         description: "No description available",
         category: categoryId, // Assign category ID
         fileUrl: fileUrl,
+        fileSize: (contentLength / (1024 * 1024)).toFixed(2), // File size in MB
+        uploadedAt: uploadedAt,
       };
     } else {
       console.log(`Skipping unsupported file type for file: ${file.data.name}`);
@@ -580,11 +583,13 @@ async function fetchAllFileContents(files, categoryId, drive) {
       const metadata = await fetchFileMetadata(file.id, drive);
       const contentLength = metadata.size; // File size from metadata
       const mimeType = metadata.mimeType; // MIME type from metadata
+      const uploadedAt = metadata.createdTime || metadata.modifiedTime; // Use created or modified time
 
       // Debugging logs
       console.log(`File Name: ${file.name}`);
       console.log(`Content Length (size): ${contentLength}`);
       console.log(`Type of Content Length: ${typeof contentLength}`);
+      console.log(`Uploaded At: ${uploadedAt}`);
 
       if (!contentLength || typeof contentLength !== "number") {
         console.error(`Skipping file ${file.name}: File size is invalid.`);
@@ -613,6 +618,8 @@ async function fetchAllFileContents(files, categoryId, drive) {
           description: "No description available",
           category: `${categoryId}`,
           fileUrl: fileUrl,
+          fileSize: (contentLength / (1024 * 1024)).toFixed(2), // File size in MB
+          uploadedAt: uploadedAt,
         });
       } else {
         console.log(`Skipping unsupported file type for file: ${file.name}`);
@@ -641,15 +648,16 @@ async function fetchFileBufferFromGoogleDrive(fileId, drive) {
   }
 }
 
+// Fetch metadata including uploaded time
 async function fetchFileMetadata(fileId, drive) {
   try {
     const response = await drive.files.get({
       fileId: fileId,
-      fields: "id, name, mimeType, size",
+      fields: "id, name, mimeType, size, createdTime, modifiedTime",
     });
     const metadata = response.data;
     metadata.size = metadata.size ? Number(metadata.size) : 0; // Ensure size is a number
-    return metadata; // Includes file size
+    return metadata; // Includes file size and timestamps
   } catch (error) {
     console.error("Failed to fetch file metadata from Google Drive:", error);
     throw new Error("Failed to fetch file metadata");
