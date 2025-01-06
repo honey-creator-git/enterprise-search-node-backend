@@ -463,7 +463,10 @@ async function pushToAzureSearch(documents, coid) {
         "@search.action": "mergeOrUpload",
         id: doc.id,
         title: doc.title,
-        content: doc.content,
+        content:
+          typeof doc.content === "object"
+            ? JSON.stringify(doc.content)
+            : doc.content,
         description: doc.description,
         image: doc.image,
         category: doc.category,

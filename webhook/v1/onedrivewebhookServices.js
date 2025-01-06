@@ -455,7 +455,7 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
       new Date().toISOString();
 
     return {
-      content: extractedText,
+      content: extractedText || "",
       fileSize: fileSizeMB,
       uploadedAt: uploadedAt,
     };
