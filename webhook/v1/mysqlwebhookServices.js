@@ -370,7 +370,12 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
 
     // Fetch rows where `id` is greater than the last processed ID
     const [rows] = await connection.query(
-      `SELECT id, ${config.field_name} AS field_value FROM ${config.table_name} WHERE id > ? ORDER BY id ASC`,
+      `SELECT id, ${config.field_name} AS field_value,
+                LENGTH(${config.field_name}) AS file_size,
+                CURRENT_TIMESTAMP AS uploaded_at
+         FROM ${config.table_name}
+         WHERE id > ?
+         ORDER BY id ASC`,
       [config.lastProcessedId || 0]
     );
 
@@ -389,6 +394,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
     for (const row of rows) {
       let processedContent;
       let fileUrl = "";
+      const fileSizeInMB = (row.file_size / (1024 * 1024)).toFixed(2); // Convert to MB
 
       try {
         const fileBuffer = row.field_value;
@@ -437,6 +443,8 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
             image: config.image || null,
             category: config.category,
             fileUrl: fileUrl,
+            fileSize: parseFloat(fileSizeInMB), // Add file size (in MB)
+            uploadedAt: row.uploaded_at, // Add uploaded timestamp
           });
         });
       }
