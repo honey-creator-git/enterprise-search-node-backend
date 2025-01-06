@@ -456,7 +456,7 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
     }
 
     // Convert file size to MB and capture uploaded time
-    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    const fileSizeMB = parseFloat((file.size / (1024 * 1024)).toFixed(2));
     const uploadedAt = file.createdDateTime || file.lastModifiedDateTime;
 
     return {
