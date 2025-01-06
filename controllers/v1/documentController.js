@@ -2268,6 +2268,8 @@ exports.syncOneDrive = async (req, res) => {
                   image: null,
                   description: `File from OneDrive: ${file.name}`,
                   fileUrl: fileUrl, // Storing the file URL
+                  fileSize: fileSize, // Store file size in MB
+                  uploadedAt: uploadedAt, // Store created or modified timestamp
                 });
               }
             } catch (error) {

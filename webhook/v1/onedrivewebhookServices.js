@@ -385,6 +385,17 @@ async function getFilesFromOneDrive(accessToken, graphBaseUrl, userName) {
           userName
         ); // Fetch files from the folder
         files = files.concat(folderFiles);
+      } else if (folder.file) {
+        // For individual files, capture size and timestamps
+        files.push({
+          id: folder.id,
+          name: folder.name,
+          size: folder.size,
+          createdDateTime: folder.createdDateTime,
+          lastModifiedDateTime: folder.lastModifiedDateTime,
+          mimeType: folder.file.mimeType,
+          downloadUrl: folder["@microsoft.graph.downloadUrl"],
+        });
       }
     }
 
@@ -414,34 +425,45 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
         : "arraybuffer",
     });
 
+    let extractedText;
     if (fileType === "txt") {
-      return extractTextFromTxt(response.data);
+      extractedText = extractTextFromTxt(response.data);
     } else if (fileType === "json") {
-      return extractTextFromJson(response.data);
+      extractedText = extractTextFromJson(response.data);
     } else if (fileType === "html") {
-      return extractTextFromHtml(response.data);
+      extractedText = extractTextFromHtml(response.data);
     } else if (fileType === "csv") {
-      return extractTextFromCsv(response.data);
+      extractedText = extractTextFromCsv(response.data);
     } else if (fileType === "xml") {
-      return extractTextFromXml(response.data);
+      extractedText = extractTextFromXml(response.data);
     } else if (fileType === "pdf") {
-      return extractTextFromPdf(Buffer.from(response.data, "binary"));
+      extractedText = extractTextFromPdf(Buffer.from(response.data, "binary"));
     } else if (fileType === "doc") {
-      return extractTextFromDoc(Buffer.from(response.data, "binary"));
+      extractedText = extractTextFromDoc(Buffer.from(response.data, "binary"));
     } else if (fileType === "docx") {
-      return extractTextFromDocx(Buffer.from(response.data, "binary"));
+      extractedText = extractTextFromDocx(Buffer.from(response.data, "binary"));
     } else if (fileType === "xlsx") {
-      return extractTextFromXlsx(Buffer.from(response.data, "binary"));
+      extractedText = extractTextFromXlsx(Buffer.from(response.data, "binary"));
     } else if (fileType === "rtx") {
-      return extractTextFromRtx(response.data);
+      extractedText = extractTextFromRtx(response.data);
     } else if (fileType === "ppt") {
-      return extractTextFromPpt(Buffer.from(response.data, "binary"));
+      extractedText = extractTextFromPpt(Buffer.from(response.data, "binary"));
     } else if (fileType === "pptx") {
-      return extractTextFromPptx(Buffer.from(response.data, "binary"));
+      extractedText = extractTextFromPptx(Buffer.from(response.data, "binary"));
     } else {
       console.log(`Unsupported file type: ${fileType}`);
-      return null;
+      extractedText = null;
     }
+
+    // Convert file size to MB and capture uploaded time
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    const uploadedAt = file.createdDateTime || file.lastModifiedDateTime;
+
+    return {
+      content: extractedText,
+      fileSize: fileSizeMB,
+      uploadedAt: uploadedAt,
+    };
   } catch (error) {
     console.error(
       `Error fetching content for file: ${file.name}`,
