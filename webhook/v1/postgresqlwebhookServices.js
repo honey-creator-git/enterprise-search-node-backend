@@ -472,7 +472,9 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
 
     // Step 4: Fetch Data from the Table
     const query = `
-            SELECT id, ${config.field_name} AS field_value
+            SELECT id, ${config.field_name} AS field_value,
+            octet_length(${config.field_name}) AS file_size,
+            CURRENT_TIMESTAMP AS uploaded_at
             FROM ${config.table_name}
             WHERE id > $1
             ORDER BY id ASC
@@ -527,6 +529,9 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
       }
 
       if (processedContent) {
+        console.log("File Size => ", row.file_size);
+        console.log("Uploaded At => ", row.uploaded_at);
+
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
