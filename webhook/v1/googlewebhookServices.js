@@ -468,10 +468,8 @@ async function pushToAzureSearch(documents, coid) {
         image: doc.image,
         category: doc.category,
         fileUrl: doc.fileUrl, // Add the file URL here
-        fileSize: doc.fileSize ? parseFloat(doc.fileSize) : 0, // Ensure correct type
-        uploadedAt: doc.uploadedAt
-          ? new Date(doc.uploadedAt).toISOString()
-          : null,
+        fileSize: doc.fileSize, // Ensure this is passed correctly
+        uploadedAt: doc.uploadedAt,
       })),
     };
 

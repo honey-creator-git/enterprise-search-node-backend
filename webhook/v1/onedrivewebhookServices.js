@@ -441,12 +441,18 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
       extractedText = extractTextFromPptx(Buffer.from(response.data, "binary"));
     } else {
       console.log(`Unsupported file type: ${fileType}`);
-      extractedText = null;
+      return null; // Skip unsupported files
     }
 
     // Convert file size to MB and capture uploaded time
-    const fileSizeMB = parseFloat((file.size / (1024 * 1024)).toFixed(2));
-    const uploadedAt = file.createdDateTime || file.lastModifiedDateTime;
+    const fileSizeMB = file.size
+      ? parseFloat((file.size / (1024 * 1024)).toFixed(2))
+      : 0;
+
+    const uploadedAt =
+      file.createdDateTime ||
+      file.lastModifiedDateTime ||
+      new Date().toISOString();
 
     return {
       content: extractedText,
