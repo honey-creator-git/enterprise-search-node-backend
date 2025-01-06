@@ -3120,14 +3120,6 @@ exports.syncDataFromDatasources = async (req, res) => {
   }
 };
 
-exports.getStorageContainerSizeAndCount = async (req, res) => {
-  const containerStats = await getContainerStats();
-  return res.status(200).json({
-    count: containerStats.fileCount,
-    size: containerStats.totalSizeMB,
-  });
-};
-
 // Function to get data source type count
 async function getDataSourceTypeCount(coid) {
   const indexName = `datasourcetypes_${coid.toLowerCase()}`;
@@ -3144,14 +3136,16 @@ async function getDataSourceTypeCount(coid) {
   }
 }
 
-exports.getDataSourceTypeCount = async (req, res) => {
+exports.getStorageContainerSizeAndCount = async (req, res) => {
   try {
     const coid = req.coid;
-
     const count = await getDataSourceTypeCount(coid);
+
+    const containerStats = await getContainerStats();
     return res.status(200).json({
-      message: "Data source type count fetched successfully",
-      count,
+      storage_count: containerStats.fileCount,
+      storag_size: containerStats.totalSizeMB,
+      datasource_count: count
     });
   } catch (error) {
     console.error("Error in controller:", error.message);
