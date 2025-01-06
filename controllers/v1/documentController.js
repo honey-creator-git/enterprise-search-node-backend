@@ -3144,7 +3144,7 @@ exports.getStorageContainerSizeAndCount = async (req, res) => {
     const containerStats = await getContainerStats();
     return res.status(200).json({
       storage_count: containerStats.fileCount,
-      storag_size: containerStats.totalSizeMB,
+      storage_size: containerStats.totalSizeMB,
       datasource_count: count
     });
   } catch (error) {
