@@ -879,6 +879,7 @@ exports.searchDocumentsFromAzureAIIndex = async (req, res) => {
       if (results.length < pageSize) break; // Stop if fewer documents are returned
     }
 
+    console.log("Search Query ===> ", query);
     console.log("Total Search Length ===> ", allDocuments.length);
 
     res.status(200).json({
