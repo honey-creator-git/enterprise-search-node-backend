@@ -230,7 +230,7 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
     // Fetch file metadata
     const metadata = await fetchFileMetadata(file.id, drive);
     const contentLength = metadata.size; // File size from metadata
-    const mimeType = metadata.mimeType; // MIME type from metadata    
+    const mimeType = metadata.mimeType; // MIME type from metadata
     const uploadedAt = metadata.createdTime || metadata.modifiedTime; // Use created or modified time
 
     // Debugging logs
@@ -468,8 +468,10 @@ async function pushToAzureSearch(documents, coid) {
         image: doc.image,
         category: doc.category,
         fileUrl: doc.fileUrl, // Add the file URL here
-        fileSize: doc.fileSize,
-        uploadedAt: doc.uploadedAt,
+        fileSize: doc.fileSize ? parseFloat(doc.fileSize) : 0, // Ensure correct type
+        uploadedAt: doc.uploadedAt
+          ? new Date(doc.uploadedAt).toISOString()
+          : null,
       })),
     };
 
@@ -491,8 +493,12 @@ async function pushToAzureSearch(documents, coid) {
   } catch (error) {
     console.error(
       "Error pushing documents to Azure Cognitive Search:",
-      error.message
+      error.response ? error.response.data : error.message
     );
+    // Log full response if available
+    if (error.response && error.response.data) {
+      console.log("Azure Response:", error.response.data.error);
+    }
     throw new Error("Failed to push documents to Azure Cognitive Search");
   }
 }
