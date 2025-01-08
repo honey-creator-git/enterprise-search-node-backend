@@ -1,63 +1,41 @@
-const jwt = require("jsonwebtoken");
-const axios = require("axios");
+const jwt = require("jsonwebtoken"); // Make sure to install this if you haven't: npm install jsonwebtoken
 
-// Middleware to validate tokens issued by Keycloak
-const setRoleMiddleware = async (req, res, next) => {
+// Middleware to check and set role
+const setRoleMiddleware = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.status(401).send("Authorization header missing");
 
   const token = authHeader.split(" ")[1];
-  if (!token) return res.status(401).send("Token missing");
 
   try {
-    // Decode token without validation to extract `kid` and `iss`
-    const decodedToken = jwt.decode(token, { complete: true });
+    // Decode the token (assuming no verification here since it's a third-party token without a secret)
+    const decodedToken = jwt.decode(token);
     if (!decodedToken) return res.status(401).send("Invalid token");
 
-    const { kid } = decodedToken.header;
-    const { iss } = decodedToken.payload;
+    req.adminRole = decodedToken.groups.join(", ").includes("Admin")
+      ? true
+      : false;
 
-    if (!iss) return res.status(400).send("Token issuer (iss) missing");
+    req.userId = decodedToken["uoid"]; // Get uoid from token
+    req.coid = decodedToken["coid"]; // Get coid from token
 
-    // Fetch JWKS URI from Keycloak's discovery document
-    const openIdConfigUrl = `${iss}/.well-known/openid-configuration`;
-    const { data: openIdConfig } = await axios.get(openIdConfigUrl);
-    const jwksUri = openIdConfig.jwks_uri;
+    req.name = decodedToken["name"]; // Get name from token
+    req.email = decodedToken["email"]; // Get email from token
 
-    // Fetch the JWKS keys
-    const { data: jwks } = await axios.get(jwksUri);
+    req.permissions = decodedToken["permissions"].join(", ");
+    req.groups = decodedToken["groups"].join(", ");
 
-    // Find the signing key by `kid`
-    const signingKey = jwks.keys.find((key) => key.kid === kid);
-    if (!signingKey) return res.status(401).send("Signing key not found");
+    // Check if "groups" includes "Admin"
+    const groups = decodedToken.groups || [];
+    req.userRole = groups.includes("Admin") ? "Admin" : "Viewer";
 
-    // Convert the public key to PEM format
-    const publicKey = `-----BEGIN CERTIFICATE-----\n${signingKey.x5c[0]}\n-----END CERTIFICATE-----`;
+    // Check if "permissions" includes "ESS"
+    const permissions = decodedToken.permissions || [];
+    req.userPermission = permissions.includes("ESS") ? "ESS" : "";
 
-    // Validate the token with the public key
-    jwt.verify(token, publicKey, { algorithms: ["RS256"] }, (err, verifiedToken) => {
-      if (err) {
-        console.error("Token validation failed:", err);
-        return res.status(401).send("Invalid token");
-      }
-
-      // Set user properties from the verified token
-      req.userId = verifiedToken.uoid || null;
-      req.coid = verifiedToken.coid || null;
-      req.name = verifiedToken.name || "Unknown";
-      req.email = verifiedToken.email || "Unknown";
-      req.groups = (verifiedToken.groups || []).join(", ");
-      req.permissions = (verifiedToken.permissions || []).join(", ");
-
-      // Assign role and permission based on claims
-      req.userRole = (verifiedToken.groups || []).includes("Admin") ? "Admin" : "Viewer";
-      req.userPermission = (verifiedToken.permissions || []).includes("ESS") ? "ESS" : "";
-
-      // Proceed to the next middleware
-      next();
-    });
+    next();
   } catch (error) {
-    console.error("Error validating token:", error);
+    console.error("Error decoding token:", error);
     res.status(500).send("Internal server error");
   }
 };
