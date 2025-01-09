@@ -31,7 +31,7 @@ const setRoleMiddleware = (req, res, next) => {
 
     // Check if "permissions" includes "ESS"
     const permissions = decodedToken.permissions || [];
-    req.userPermission = permissions.includes("ESS") ? "ESS" : "";
+    req.userPermission = permissions.includes("ess::") ? "ESS" : "";
 
     next();
   } catch (error) {
