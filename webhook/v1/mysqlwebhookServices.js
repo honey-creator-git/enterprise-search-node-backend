@@ -1,4 +1,3 @@
-import { fileTypeFromBuffer } from "file-type";
 const client = require("./../../config/elasticsearch");
 const { uploadFileToBlob } = require("../../services/v1/blobStorage");
 const mysql = require("mysql2/promise");
@@ -190,6 +189,7 @@ function normalizeEncoding(buffer) {
 
 // Detect MIME Type from Buffer
 async function detectMimeType(buffer) {
+  const { fileTypeFromBuffer } = await import("file-type");
   try {
     // Normalize the buffer to ensure encoding issues don't cause failures
     const normalizedBuffer = Buffer.from(normalizeEncoding(buffer), "utf-8");
