@@ -47,7 +47,7 @@ async function extractTextFromDocx(buffer) {
   }
 }
 
-async function extractTextFromHtml(htmlContent) {
+function extractTextFromHtml(htmlContent) {
   try {
     const $ = cheerio.load(htmlContent);
     return $("body").text().trim() || "No text found";
@@ -78,7 +78,7 @@ async function extractTextFromXlsx(buffer) {
   }
 }
 
-async function extractTextFromTxt(textContent) {
+function extractTextFromTxt(textContent) {
   try {
     return textContent.trim() || "No text found";
   } catch (error) {
@@ -154,7 +154,7 @@ async function extractTextFromPptx(buffer) {
   }
 }
 
-async function extractTextFromJson(data) {
+function extractTextFromJson(data) {
   try {
     const jsonData = typeof data === "string" ? JSON.parse(data) : data;
     return JSON.stringify(jsonData, null, 2) || "No text found";
