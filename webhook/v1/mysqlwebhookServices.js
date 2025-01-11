@@ -180,11 +180,16 @@ async function processFieldContent(
 
 function normalizeEncoding(buffer) {
   try {
-    // Ensure proper decoding with fallback
-    return iconv.decode(buffer, "utf-8");
+    // Decode the buffer using UTF-8
+    const decodedContent = iconv.decode(buffer, "utf-8");
+    console.log(
+      "Decoded content (first 50 chars):",
+      decodedContent.slice(0, 50)
+    );
+    return decodedContent;
   } catch (error) {
-    console.error("Encoding normalization failed:", error);
-    return buffer.toString("utf-8"); // Secondary fallback to UTF-8 string conversion
+    console.error("Encoding normalization failed:", error.message);
+    return buffer.toString("utf-8"); // Fallback to UTF-8 string conversion
   }
 }
 
@@ -193,30 +198,32 @@ async function detectMimeType(buffer) {
   const { fileTypeFromBuffer } = await import("file-type");
 
   try {
-    // Normalize the buffer to handle encoding issues
-    const normalizedBuffer = Buffer.from(normalizeEncoding(buffer), "utf-8");
+    console.log(
+      "Buffer first 20 bytes (hex):",
+      buffer.slice(0, 20).toString("hex")
+    );
 
     // Use file-type to detect MIME type
-    const fileTypeResult = await fileTypeFromBuffer(normalizedBuffer);
+    const fileTypeResult = await fileTypeFromBuffer(buffer);
 
     if (fileTypeResult) {
       console.log(`Detected MIME type using file-type: ${fileTypeResult.mime}`);
       return fileTypeResult.mime;
     }
 
-    // Fallback: Analyze buffer content manually
-    const content = normalizedBuffer.toString("utf-8").trim();
-    console.log("Buffer first 20 bytes:", content.slice(0, 20)); // Debugging output
+    // Normalize the encoding and analyze the content
+    const normalizedContent = await normalizeEncoding(buffer);
 
-    // Improved heuristics for plain text detection
-    if (/^[\x20-\x7E\r\n\t]*$/.test(content)) {
-      console.log("Content matches plain text heuristics.");
+    // Check for UTF-8 compliance using heuristic
+    if (isUtf8(buffer)) {
+      console.log("Content is UTF-8 encoded text.");
       return "text/plain";
     }
 
-    // Check for UTF-8 compliance
-    if (isUtf8(buffer)) {
-      console.log("Content appears to be UTF-8 encoded plain text.");
+    // Fallback plain text detection
+    const isPlainText = /^[\x20-\x7E\r\n\t]*$/.test(normalizedContent);
+    if (isPlainText) {
+      console.log("Content matches plain text heuristics.");
       return "text/plain";
     }
 
@@ -229,18 +236,16 @@ async function detectMimeType(buffer) {
   return "application/octet-stream";
 }
 
-// Helper function to check if the buffer is valid UTF-8
+// Helper function to validate UTF-8 encoding
 function isUtf8(buffer) {
   try {
-    const utf8Content = buffer.toString("utf-8");
-    // If decoding doesn't throw, assume it's UTF-8
-    return /^[\x20-\x7E\r\n\t]*$/.test(utf8Content); // Match printable characters
+    buffer.toString("utf-8"); // If it doesn't throw, it's valid UTF-8
+    return true;
   } catch (error) {
-    console.error("UTF-8 validation failed:", error);
+    console.error("UTF-8 validation failed:", error.message);
     return false;
   }
 }
-
 // Process BLOB field for text extraction
 async function processBlobField(fileBuffer) {
   let extractedText = "";
