@@ -180,21 +180,23 @@ async function processFieldContent(
 
 function normalizeEncoding(buffer) {
   try {
+    // Ensure proper decoding with fallback
     return iconv.decode(buffer, "utf-8");
   } catch (error) {
     console.error("Encoding normalization failed:", error);
-    return buffer.toString(); // Fallback
+    return buffer.toString("utf-8"); // Secondary fallback to UTF-8 string conversion
   }
 }
 
 // Detect MIME Type from Buffer
 async function detectMimeType(buffer) {
   const { fileTypeFromBuffer } = await import("file-type");
+
   try {
-    // Normalize the buffer to ensure encoding issues don't cause failures
+    // Normalize the buffer to handle encoding issues
     const normalizedBuffer = Buffer.from(normalizeEncoding(buffer), "utf-8");
 
-    // Detect MIME type using file-type library
+    // Use file-type to detect MIME type
     const fileTypeResult = await fileTypeFromBuffer(normalizedBuffer);
 
     if (fileTypeResult) {
@@ -202,13 +204,19 @@ async function detectMimeType(buffer) {
       return fileTypeResult.mime;
     }
 
-    // Fallback: Inspect buffer content for plain text
+    // Fallback: Analyze buffer content manually
     const content = normalizedBuffer.toString("utf-8").trim();
     console.log("Buffer first 20 bytes:", content.slice(0, 20)); // Debugging output
 
-    // Check if content matches printable ASCII or UTF-8 characters
+    // Improved heuristics for plain text detection
     if (/^[\x20-\x7E\r\n\t]*$/.test(content)) {
       console.log("Content matches plain text heuristics.");
+      return "text/plain";
+    }
+
+    // Check for UTF-8 compliance
+    if (isUtf8(buffer)) {
+      console.log("Content appears to be UTF-8 encoded plain text.");
       return "text/plain";
     }
 
@@ -217,8 +225,20 @@ async function detectMimeType(buffer) {
     console.error("Error in MIME type detection:", error.message);
   }
 
-  // Default to application/octet-stream for unsupported or undetected cases
+  // Default fallback for undetectable or unsupported content
   return "application/octet-stream";
+}
+
+// Helper function to check if the buffer is valid UTF-8
+function isUtf8(buffer) {
+  try {
+    const utf8Content = buffer.toString("utf-8");
+    // If decoding doesn't throw, assume it's UTF-8
+    return /^[\x20-\x7E\r\n\t]*$/.test(utf8Content); // Match printable characters
+  } catch (error) {
+    console.error("UTF-8 validation failed:", error);
+    return false;
+  }
 }
 
 // Process BLOB field for text extraction
