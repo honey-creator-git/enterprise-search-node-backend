@@ -184,27 +184,35 @@ function normalizeEncoding(buffer) {
 
 // Detect MIME Type from Buffer
 async function detectMimeType(buffer) {
-  const normalizedBuffer = Buffer.from(normalizeEncoding(buffer), "utf-8");
-  const { fileTypeFromBuffer } = await import("file-type"); // Dynamic import
-  const fileTypeResult = await fileTypeFromBuffer(normalizedBuffer); // Correct function
+  const { fileTypeFromBuffer } = await import("file-type");
 
-  // Fallback: Inspect buffer for HTML tags
-  const content = normalizedBuffer.toString("utf-8").trim();
-  if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
-    return "text/html";
-  }
+  // Normalize buffer encoding to UTF-8
+  const normalizedBuffer = Buffer.from(buffer.toString("utf-8"), "utf-8");
 
-  // Check if fileTypeFromBuffer fails or returns application/octet-stream
+  // Detect MIME type from the normalized buffer
+  const fileTypeResult = await fileTypeFromBuffer(normalizedBuffer);
+
+  // Debug buffer content
+  console.log("Buffer first 20 bytes:", normalizedBuffer.slice(0, 20));
+  console.log("Detected MIME type:", fileTypeResult);
+
+  // Fallback for plain text detection
   if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
-    // Try reading the buffer as UTF-8 plain text
-    const textContent = normalizedBuffer.toString("utf-8");
+    const content = normalizedBuffer.toString("utf-8").trim();
 
-    // Simple heuristic: If the buffer decodes without issues, it's likely plain text
-    if (/^[\x00-\x7F]*$/.test(textContent)) {
+    // Heuristic check: If the buffer contains only printable characters, assume text/plain
+    if (/^[\x20-\x7E\r\n\t]*$/.test(content)) {
+      console.log("Content appears to be plain text.");
+      return "text/plain";
+    }
+
+    // Further heuristic: Check for non-printable characters
+    if (content.length > 0 && /^[^\x00-\x1F]*$/.test(content)) {
       return "text/plain";
     }
   }
 
+  // Use the detected MIME type or fallback to application/octet-stream
   return fileTypeResult ? fileTypeResult.mime : "application/octet-stream";
 }
 
