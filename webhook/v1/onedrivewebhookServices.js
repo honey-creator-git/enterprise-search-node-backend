@@ -444,6 +444,8 @@ async function fetchFileContentFromOneDrive(file, accessToken) {
       };
     }
 
+    console.log("OneDrive Response Data => ", response.data);
+
     let extractedText;
     const buffer = Buffer.from(response.data, "binary");
 
