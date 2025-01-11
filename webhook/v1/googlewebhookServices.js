@@ -636,7 +636,7 @@ async function fetchAllFileContents(files, categoryId, drive) {
         const chunks = splitLargeText(content);
         chunks.forEach((chunk, index) => {
           fileData.push({
-            id: `${file._id}_${index}`,
+            id: `${file.id}_${index}`,
             content: chunk,
             title: file.name,
             description: "No description available",
