@@ -211,6 +211,12 @@ async function detectMimeType(buffer) {
       return fileTypeResult.mime;
     }
 
+    const content = buffer.toString("utf-8").trim();
+
+    if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
+      return "text/html";
+    }
+
     // Normalize the encoding and analyze the content
     const normalizedContent = await normalizeEncoding(buffer);
 
