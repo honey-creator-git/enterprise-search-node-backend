@@ -1,3 +1,4 @@
+import { fileTypeFromBuffer } from "file-type";
 const client = require("./../../config/elasticsearch");
 const { uploadFileToBlob } = require("../../services/v1/blobStorage");
 const mysql = require("mysql2/promise");
