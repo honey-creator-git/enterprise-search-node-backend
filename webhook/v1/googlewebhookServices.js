@@ -221,6 +221,7 @@ async function refreshAccessToken(client_id, client_secret, refreshToken) {
 
 // Fetch file data from Google Drive
 async function fetchFileData(fileId, categoryId, gc_accessToken) {
+  const fileData = [];
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: gc_accessToken });
 
@@ -260,16 +261,21 @@ async function fetchFileData(fileId, categoryId, gc_accessToken) {
     });
     const content = await fetchFileContentByType(file.data, drive);
     if (content !== "Unsupported file type") {
-      return {
-        id: file.data.id,
-        title: file.data.name,
-        content: content,
-        description: "No description available",
-        category: categoryId, // Assign category ID
-        fileUrl: fileUrl,
-        fileSize: (contentLength / (1024 * 1024)).toFixed(2), // File size in MB
-        uploadedAt: uploadedAt,
-      };
+      const chunks = splitLargeText(content);
+      chunks.forEach((chunk, index) => {
+        fileData.push({
+          id: `${file.data.id}_${index}`,
+          content: chunk,
+          title: file.data.name,
+          description: "No description available",
+          category: categoryId, // Assign category ID
+          fileUrl: fileUrl,
+          fileSize: (contentLength / (1024 * 1024)).toFixed(2), // File size in MB
+          uploadedAt: uploadedAt, // Add uploadedAt timestamp
+        });
+      });
+
+      return fileData;
     } else {
       console.log(`Skipping unsupported file type for file: ${file.data.name}`);
       return null;
@@ -582,6 +588,14 @@ async function registerWebhook(
   }
 }
 
+function splitLargeText(content, maxChunkSize = 30000) {
+  const chunks = [];
+  for (let i = 0; i < content.length; i += maxChunkSize) {
+    chunks.push(content.substring(i, i + maxChunkSize));
+  }
+  return chunks;
+}
+
 async function fetchAllFileContents(files, categoryId, drive) {
   const fileData = [];
   for (const file of files) {
@@ -618,15 +632,19 @@ async function fetchAllFileContents(files, categoryId, drive) {
       if (content !== "Unsupported file type") {
         console.log("File Name => ", file.name);
         console.log("File Content => ", content);
-        fileData.push({
-          id: file.id,
-          title: file.name,
-          content: content,
-          description: "No description available",
-          category: `${categoryId}`,
-          fileUrl: fileUrl,
-          fileSize: (contentLength / (1024 * 1024)).toFixed(2), // File size in MB
-          uploadedAt: uploadedAt,
+
+        const chunks = splitLargeText(content);
+        chunks.forEach((chunk, index) => {
+          fileData.push({
+            id: `${file._id}_${index}`,
+            content: chunk,
+            title: file.name,
+            description: "No description available",
+            category: `${categoryId}`,
+            fileUrl: fileUrl,
+            fileSize: (contentLength / (1024 * 1024)).toFixed(2), // File size in MB
+            uploadedAt: uploadedAt, // Add uploadedAt timestamp
+          });
         });
       } else {
         console.log(`Skipping unsupported file type for file: ${file.name}`);

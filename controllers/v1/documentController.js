@@ -1988,8 +1988,8 @@ exports.googleDriveWebhook = async (req, res) => {
               accessToken
             );
             console.log("File Data => ", fileData);
-            if (fileData) {
-              await pushToAzureSearch([fileData], coid);
+            if (fileData.length > 0) {
+              await pushToAzureSearch(fileData, coid);
             }
           }
         }
@@ -2014,8 +2014,8 @@ exports.googleDriveWebhook = async (req, res) => {
           categoryId,
           accessToken
         );
-        if (fileData) {
-          await pushToAzureSearch([fileData], coid);
+        if (fileData.length > 0) {
+          await pushToAzureSearch(fileData, coid);
         }
       }
     } catch (tokenError) {
@@ -2068,8 +2068,8 @@ exports.googleDriveWebhook = async (req, res) => {
                 categoryId,
                 accessToken
               );
-              if (fileData) {
-                await pushToAzureSearch([fileData], coid);
+              if (fileData.length > 0) {
+                await pushToAzureSearch(fileData, coid);
               }
             }
           }
@@ -2094,8 +2094,8 @@ exports.googleDriveWebhook = async (req, res) => {
             categoryId,
             accessToken
           );
-          if (fileData) {
-            await pushToAzureSearch([fileData], coid);
+          if (fileData.length > 0) {
+            await pushToAzureSearch(fileData, coid);
           }
         }
       } catch (refreshError) {
@@ -2164,6 +2164,14 @@ exports.getTokens = async (req, res) => {
       .json({ error: "Failed to exchange authorization code for tokens" });
   }
 };
+
+function splitLargeText(content, maxChunkSize = 30000) {
+  const chunks = [];
+  for (let i = 0; i < content.length; i += maxChunkSize) {
+    chunks.push(content.substring(i, i + maxChunkSize));
+  }
+  return chunks;
+}
 
 exports.syncOneDrive = async (req, res) => {
   const { tenant_id, client_id, client_secret, name, type, userName } =
@@ -2268,17 +2276,19 @@ exports.syncOneDrive = async (req, res) => {
                   mimeType
                 ); // Upload to Azure Blob and get the URL
 
-                documents.push({
-                  id: file.id,
-                  // title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
-                  title: file.name,
-                  content,
-                  category: newCategoryId,
-                  image: null,
-                  description: `File from OneDrive: ${file.name}`,
-                  fileUrl: fileUrl, // Storing the file URL
-                  fileSize: fileSize, // Store file size in MB
-                  uploadedAt: new Date(uploadedAt).toISOString(), // Store created or modified timestamp
+                const chunks = splitLargeText(content);
+                chunks.forEach((chunk, index) => {
+                  documents.push({
+                    id: `${file.id}_${index}`,
+                    title: file.name,
+                    content: chunk,
+                    description: `File from OneDrive: ${file.name}`,
+                    image: null,
+                    category: newCategoryId,
+                    fileUrl: fileUrl,
+                    fileSize: fileSize, // Store file size in MB
+                    uploadedAt: new Date(uploadedAt).toISOString(), // Store created or modified timestamp
+                  });
                 });
               }
             } catch (error) {
@@ -2374,17 +2384,19 @@ exports.oneDriveWebhook = async (req, res) => {
                       mimeType
                     );
 
-                    documents.push({
-                      id: file.id,
-                      // title: file.name + " & " + file["@microsoft.graph.downloadUrl"] + " & " + file["webUrl"],
-                      title: file.name,
-                      content,
-                      category: category,
-                      image: null,
-                      description: `File from OneDrive: ${file.name}`,
-                      fileUrl: fileUrl,
-                      fileSize: fileSize, // Store file size in MB
-                      uploadedAt: new Date(uploadedAt).toISOString(), // Store created or modified timestamp
+                    const chunks = splitLargeText(content);
+                    chunks.forEach((chunk, index) => {
+                      documents.push({
+                        id: `${file.id}_${index}`,
+                        title: file.name,
+                        content: chunk,
+                        description: `File from OneDrive: ${file.name}`,
+                        image: null,
+                        category: category,
+                        fileUrl: fileUrl,
+                        fileSize: fileSize, // Store file size in MB
+                        uploadedAt: new Date(uploadedAt).toISOString(), // Store created or modified timestamp
+                      });
                     });
                   }
                 } catch (error) {
@@ -3148,7 +3160,7 @@ exports.getStorageContainerSizeAndCount = async (req, res) => {
     return res.status(200).json({
       storage_count: containerStats.fileCount,
       storage_size: containerStats.totalSizeMB,
-      datasource_count: count
+      datasource_count: count,
     });
   } catch (error) {
     console.error("Error in controller:", error.message);

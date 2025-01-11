@@ -176,29 +176,79 @@ async function processFieldContent(
   }
 }
 
+function normalizeEncoding(buffer) {
+  try {
+    // Decode the buffer using UTF-8
+    const decodedContent = iconv.decode(buffer, "utf-8");
+    console.log(
+      "Decoded content (first 50 chars):",
+      decodedContent.slice(0, 50)
+    );
+    return decodedContent;
+  } catch (error) {
+    console.error("Encoding normalization failed:", error.message);
+    return buffer.toString("utf-8"); // Fallback to UTF-8 string conversion
+  }
+}
+
 // Detect MIME Type from Buffer
 async function detectMimeType(buffer) {
-  const { fileTypeFromBuffer } = await import("file-type"); // Dynamic import
-  const fileTypeResult = await fileTypeFromBuffer(buffer); // Correct function
+  const { fileTypeFromBuffer } = await import("file-type");
 
-  // Fallback: Inspect buffer for HTML tags
-  const content = buffer.toString("utf-8").trim();
-  if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
-    return "text/html";
-  }
+  try {
+    console.log(
+      "Buffer first 20 bytes (hex):",
+      buffer.slice(0, 20).toString("hex")
+    );
 
-  // Check if fileTypeFromBuffer fails or returns application/octet-stream
-  if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
-    // Try reading the buffer as UTF-8 plain text
-    const textContent = buffer.toString("utf-8");
+    // Use file-type to detect MIME type
+    const fileTypeResult = await fileTypeFromBuffer(buffer);
 
-    // Simple heuristic: If the buffer decodes without issues, it's likely plain text
-    if (/^[\x00-\x7F]*$/.test(textContent)) {
+    if (fileTypeResult) {
+      console.log(`Detected MIME type using file-type: ${fileTypeResult.mime}`);
+      return fileTypeResult.mime;
+    }
+
+    const content = buffer.toString("utf-8").trim();
+
+    if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
+      return "text/html";
+    }
+
+    // Normalize the encoding and analyze the content
+    const normalizedContent = await normalizeEncoding(buffer);
+
+    // Check for UTF-8 compliance using heuristic
+    if (isUtf8(buffer)) {
+      console.log("Content is UTF-8 encoded text.");
       return "text/plain";
     }
+
+    // Fallback plain text detection
+    const isPlainText = /^[\x20-\x7E\r\n\t]*$/.test(normalizedContent);
+    if (isPlainText) {
+      console.log("Content matches plain text heuristics.");
+      return "text/plain";
+    }
+
+    console.log("Content does not match plain text heuristics.");
+  } catch (error) {
+    console.error("Error in MIME type detection:", error.message);
   }
 
-  return fileTypeResult ? fileTypeResult.mime : "application/octet-stream";
+  // Default fallback for undetectable or unsupported content
+  return "application/octet-stream";
+}
+
+// Helper function to validate UTF-8 encoding
+function isUtf8(buffer) {
+  try {
+    buffer.toString("utf-8"); // If it doesn't throw, it's valid UTF-8
+    return true;
+  } catch (error) {
+    console.error("UTF-8 validation failed:", error.message);
+    return false;
+  }
 }
 
 // Process BLOB field for text extraction
@@ -438,8 +488,8 @@ async function fetchAndProcessFieldContent(config) {
             image: config.image || null,
             category: config.category,
             fileUrl: fileUrl,
-            fileSize: parseFloat(fileSizeInMB),  // Add file size (in MB)
-            uploadedAt: row.uploaded_at,         // Add upload timestamp
+            fileSize: parseFloat(fileSizeInMB), // Add file size (in MB)
+            uploadedAt: row.uploaded_at, // Add upload timestamp
           });
         });
       }
