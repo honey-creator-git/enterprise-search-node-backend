@@ -6,6 +6,7 @@ const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const fs = require("fs"); // To read the SSL certificate file
 const textract = require("textract");
+const iconv = require("iconv-lite");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -177,13 +178,18 @@ async function processFieldContent(
   }
 }
 
+function normalizeEncoding(buffer) {
+  return iconv.decode(buffer, "utf-8");
+}
+
 // Detect MIME Type from Buffer
 async function detectMimeType(buffer) {
+  const normalizedBuffer = Buffer.from(normalizeEncoding(buffer), "utf-8");
   const { fileTypeFromBuffer } = await import("file-type"); // Dynamic import
-  const fileTypeResult = await fileTypeFromBuffer(buffer); // Correct function
+  const fileTypeResult = await fileTypeFromBuffer(normalizedBuffer); // Correct function
 
   // Fallback: Inspect buffer for HTML tags
-  const content = buffer.toString("utf-8").trim();
+  const content = normalizedBuffer.toString("utf-8").trim();
   if (content.startsWith("<!DOCTYPE html") || content.startsWith("<html")) {
     return "text/html";
   }
@@ -191,7 +197,7 @@ async function detectMimeType(buffer) {
   // Check if fileTypeFromBuffer fails or returns application/octet-stream
   if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
     // Try reading the buffer as UTF-8 plain text
-    const textContent = buffer.toString("utf-8");
+    const textContent = normalizedBuffer.toString("utf-8");
 
     // Simple heuristic: If the buffer decodes without issues, it's likely plain text
     if (/^[\x00-\x7F]*$/.test(textContent)) {
