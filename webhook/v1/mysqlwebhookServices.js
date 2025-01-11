@@ -186,34 +186,34 @@ function normalizeEncoding(buffer) {
 async function detectMimeType(buffer) {
   const { fileTypeFromBuffer } = await import("file-type");
 
-  // Normalize buffer encoding to UTF-8
-  const normalizedBuffer = Buffer.from(buffer.toString("utf-8"), "utf-8");
+  // Log the first 20 bytes of the buffer for debugging
+  console.log("Buffer first 20 bytes:", buffer.slice(0, 20).toString('utf-8'));
 
-  // Detect MIME type from the normalized buffer
-  const fileTypeResult = await fileTypeFromBuffer(normalizedBuffer);
-
-  // Debug buffer content
-  console.log("Buffer first 20 bytes:", normalizedBuffer.slice(0, 20));
-  console.log("Detected MIME type:", fileTypeResult);
-
-  // Fallback for plain text detection
-  if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
-    const content = normalizedBuffer.toString("utf-8").trim();
-
-    // Heuristic check: If the buffer contains only printable characters, assume text/plain
-    if (/^[\x20-\x7E\r\n\t]*$/.test(content)) {
-      console.log("Content appears to be plain text.");
-      return "text/plain";
-    }
-
-    // Further heuristic: Check for non-printable characters
-    if (content.length > 0 && /^[^\x00-\x1F]*$/.test(content)) {
-      return "text/plain";
-    }
+  // Attempt to detect the MIME type using fileTypeFromBuffer
+  let fileTypeResult;
+  try {
+      fileTypeResult = await fileTypeFromBuffer(buffer);
+      console.log("Detected MIME type:", fileTypeResult ? fileTypeResult.mime : "undefined");
+  } catch (error) {
+      console.error("Error detecting MIME type using fileTypeFromBuffer:", error.message);
   }
 
-  // Use the detected MIME type or fallback to application/octet-stream
-  return fileTypeResult ? fileTypeResult.mime : "application/octet-stream";
+  // If MIME type is undefined or application/octet-stream, apply fallback logic
+  if (!fileTypeResult || fileTypeResult.mime === "application/octet-stream") {
+      const content = buffer.toString("utf-8").trim();
+
+      // Heuristic: Check if the content is plain text
+      if (/^[\x20-\x7E\r\n\t]*$/.test(content)) {
+          console.log("Content appears to be plain text.");
+          return "text/plain";
+      }
+
+      console.log("Content does not match plain text heuristics. Defaulting to application/octet-stream.");
+      return "application/octet-stream";
+  }
+
+  // Return the detected MIME type
+  return fileTypeResult.mime;
 }
 
 // Process BLOB field for text extraction
