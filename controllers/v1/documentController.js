@@ -2506,7 +2506,6 @@ exports.syncMySQLDatabase = async (req, res) => {
       database: db_database,
       table_name: table_name,
       field_name: field_name,
-      field_type: "blob",
       category: newCategoryId,
       coid: req.coid,
       lastProcessedId: lastProcessedId,

@@ -339,7 +339,6 @@ async function saveMySQLConnection(
   database,
   table_name,
   field_name,
-  field_type,
   category,
   coid,
   lastProcessedId
@@ -354,7 +353,6 @@ async function saveMySQLConnection(
       database,
       table_name,
       field_name,
-      field_type,
       category,
       coid,
       lastProcessedId: lastProcessedId || 0, // Default to 0 if not provided
@@ -380,7 +378,6 @@ async function saveMySQLConnection(
               database: { type: "text" },
               table_name: { type: "text" },
               field_name: { type: "text" },
-              field_type: { type: "text" },
               category: { type: "text" },
               coid: { type: "keyword" },
               lastProcessedId: { type: "long" },
@@ -537,7 +534,6 @@ async function registerMySQLConnection(config) {
       config.database,
       config.table_name,
       config.field_name,
-      config.field_type,
       config.category,
       config.coid,
       config.lastProcessedId
