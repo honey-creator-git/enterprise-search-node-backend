@@ -253,11 +253,9 @@ function isUtf8(buffer) {
   }
 }
 // Process BLOB field for text extraction
-async function processBlobField(fileBuffer) {
+async function processBlobField(fileBuffer, mimeType) {
   let extractedText = "";
-  const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
-
-  console.log(`Mime Type => ${mimeType}`);
+  // const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
 
   try {
     switch (mimeType) {
@@ -433,7 +431,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
       console.log("No new rows found in the table.");
       return {
         data: [],
-        lastProcessedId: config.lastProcessedId || 0, // Return the same lastProcessedId
+        lastProcessedId: config.lastProcessedId || 0,
       };
     }
 
@@ -450,10 +448,20 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
         const fileBuffer = row.field_value;
         const fileName = `mysql_${config.database}_${config.table_name}_file_${row.id}`;
 
-        if (config.field_type.toLowerCase() === "blob") {
-          // Detect MIME type
-          const { extractedText, mimeType } = await processBlobField(
-            fileBuffer
+        // Detect MIME type dynamically
+        const mimeType = await detectMimeType(fileBuffer);
+
+        if (
+          mimeType.startsWith("application/") ||
+          mimeType === "text/html" ||
+          mimeType === "text/csv" ||
+          mimeType === "text/xml" ||
+          mimeType === "text/plain"
+        ) {
+          console.log(`Detected MIME type: ${mimeType}`);
+          const { extractedText } = await processBlobField(
+            fileBuffer,
+            mimeType
           );
 
           // Upload file to Azure Blob Storage
@@ -461,18 +469,12 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
 
           console.log("File URL => ", fileUrl);
 
-          // Extract Text from BLOB (PDF/DOCX)
           processedContent = extractedText;
 
           console.log("Extracted text from buffer => ", processedContent);
         } else {
-          // Handle text, JSON, or XML fields
-          processedContent = await processFieldContent(
-            row.field_value,
-            config.field_type,
-            config.json_properties,
-            config.xml_paths
-          );
+          console.log("Unsupported MIME type:", mimeType);
+          continue;
         }
       } catch (error) {
         console.error(
