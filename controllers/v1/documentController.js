@@ -2445,7 +2445,7 @@ exports.syncMySQLDatabase = async (req, res) => {
     db_database,
     table_name,
     field_name,
-    field_type,
+    title_field,
     json_properties, // For JSON fields
     xml_paths, // For XML fields
     name,
@@ -2491,6 +2491,7 @@ exports.syncMySQLDatabase = async (req, res) => {
       database: db_database,
       table_name: table_name,
       field_name: field_name,
+      title_field: title_field,
       json_properties: json_properties,
       xml_paths: xml_paths,
       category: newCategoryId,
@@ -2506,6 +2507,7 @@ exports.syncMySQLDatabase = async (req, res) => {
       database: db_database,
       table_name: table_name,
       field_name: field_name,
+      title_field: title_field,
       category: newCategoryId,
       coid: req.coid,
       lastProcessedId: lastProcessedId,

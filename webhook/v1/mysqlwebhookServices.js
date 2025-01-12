@@ -339,6 +339,7 @@ async function saveMySQLConnection(
   database,
   table_name,
   field_name,
+  title_field,
   category,
   coid,
   lastProcessedId
@@ -353,6 +354,7 @@ async function saveMySQLConnection(
       database,
       table_name,
       field_name,
+      title_field,
       category,
       coid,
       lastProcessedId: lastProcessedId || 0, // Default to 0 if not provided
@@ -378,6 +380,7 @@ async function saveMySQLConnection(
               database: { type: "text" },
               table_name: { type: "text" },
               field_name: { type: "text" },
+              title_field: { type: "text" },
               category: { type: "text" },
               coid: { type: "keyword" },
               lastProcessedId: { type: "long" },
@@ -429,9 +432,10 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
 
     // Fetch rows where `id` is greater than the last processed ID
     const [rows] = await connection.query(
-      `SELECT id, ${config.field_name} AS field_value,
-                LENGTH(${config.field_name}) AS file_size,
-                CURRENT_TIMESTAMP AS uploaded_at
+      `SELECT id, ${config.title_field} AS title,
+                  ${config.field_name} AS field_value,
+                  LENGTH(${config.field_name}) AS file_size,
+                  CURRENT_TIMESTAMP AS uploaded_at
          FROM ${config.table_name}
          WHERE id > ?
          ORDER BY id ASC`,
@@ -453,15 +457,13 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
     for (const row of rows) {
       let processedContent;
       let fileUrl = "";
+      const fileBuffer = row.field_value;
+      const fileName = row.title;
       const fileSizeInMB = (row.file_size / (1024 * 1024)).toFixed(2); // Convert to MB
 
       try {
-        const fileBuffer = row.field_value;
-        const fileName = `mysql_${config.database}_${config.table_name}_file_${row.id}`;
-
         // Detect MIME type dynamically
         const mimeType = await detectMimeType(fileBuffer);
-
         if (
           mimeType.startsWith("application/") ||
           mimeType === "text/html" ||
@@ -501,7 +503,7 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
           documents.push({
             id: `mysql_${config.database}_${config.table_name}_${row.id}_${index}`,
             content: chunk,
-            title: config.title || `MySQL Row ID ${row.id}`,
+            title: fileName || `MySQL Row ID ${row.id}`,
             description: config.description || "No description",
             image: config.image || null,
             category: config.category,
@@ -534,6 +536,7 @@ async function registerMySQLConnection(config) {
       config.database,
       config.table_name,
       config.field_name,
+      config.title_field,
       config.category,
       config.coid,
       config.lastProcessedId
