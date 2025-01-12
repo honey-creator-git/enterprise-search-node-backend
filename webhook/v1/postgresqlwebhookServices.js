@@ -136,7 +136,7 @@ async function savePostgreSQLConnection(
   database,
   table_name,
   field_name,
-  field_type,
+  title_field,
   category,
   coid,
   lastProcessedId
@@ -151,7 +151,7 @@ async function savePostgreSQLConnection(
       database,
       table_name,
       field_name,
-      field_type,
+      title_field,
       category,
       coid,
       lastProcessedId: lastProcessedId || 0, // Default to 0 if not provided
@@ -177,7 +177,7 @@ async function savePostgreSQLConnection(
               database: { type: "text" },
               table_name: { type: "text" },
               field_name: { type: "text" },
-              field_type: { type: "text" },
+              title_field: { type: "text" },
               category: { type: "text" },
               coid: { type: "keyword" },
               lastProcessedId: { type: "long" },
@@ -321,10 +321,24 @@ function normalizeEncoding(buffer) {
 }
 
 // Detect MIME Type from Buffer
-async function detectMimeType(buffer) {
+async function detectMimeType(input) {
   const { fileTypeFromBuffer } = await import("file-type");
 
   try {
+    let buffer;
+
+    // Check if the input is a string
+    if (typeof input === "string") {
+      console.log("Input is a string, converting to buffer...");
+      buffer = Buffer.from(input, "utf-8");
+    } else if (input instanceof Uint8Array || input instanceof ArrayBuffer) {
+      buffer = Buffer.from(input);
+    } else {
+      throw new Error(
+        "Expected the 'input' argument to be of type 'Uint8Array', 'ArrayBuffer', or 'string'."
+      );
+    }
+
     console.log(
       "Buffer first 20 bytes (hex):",
       buffer.slice(0, 20).toString("hex")
@@ -381,11 +395,9 @@ function isUtf8(buffer) {
 }
 
 // Process BLOB field for text extraction
-async function processBlobField(fileBuffer) {
+async function processBlobField(fileBuffer, mimeType) {
   let extractedText = "";
-  const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
-
-  console.log(`Mime Type PG => ${mimeType}`);
+  // const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
 
   try {
     switch (mimeType) {
@@ -522,7 +534,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
 
     // Step 4: Fetch Data from the Table
     const query = `
-            SELECT id, ${config.field_name} AS field_value,
+            SELECT id, ${config.title_field} AS title, ${config.field_name} AS field_value,
             octet_length(${config.field_name}) AS file_size,
             CURRENT_TIMESTAMP AS uploaded_at
             FROM ${config.table_name}
@@ -545,30 +557,37 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
     for (const row of res.rows) {
       let processedContent;
       let fileUrl = "";
+      const fileBuffer = row.field_value;
+      const fileName = row.title;
 
       try {
-        const fileBuffer = row.field_value;
-        const fileName = `pg_${config.database}_${config.table_name}_file_${row.id}`;
+        const mimeType = await detectMimeType(fileBuffer);
 
-        if (config.field_type.toLowerCase() === "blob") {
+        if (
+          mimeType.startsWith("application/") ||
+          mimeType === "text/html" ||
+          mimeType === "text/csv" ||
+          mimeType === "text/xml" ||
+          mimeType === "text/plain"
+        ) {
+          console.log(`Detected MIME type: ${mimeType}`);
           // Process BLOB Field
           const { extractedText, mimeType } = await processBlobField(
-            fileBuffer
+            fileBuffer,
+            mimeType
           );
 
           // Upload to Azure Blob Storage
           fileUrl = await uploadFileToBlob(fileBuffer, fileName, mimeType);
+
           console.log("File URL => ", fileUrl);
 
           processedContent = extractedText;
+
           console.log("Extracted text from buffer => ", processedContent);
         } else {
-          processedContent = await processFieldContent(
-            row.field_value,
-            config.field_type,
-            config.json_properties,
-            config.xml_paths
-          );
+          console.log("Unsupported MIME type:", mimeType);
+          continue;
         }
       } catch (error) {
         console.error(
@@ -587,7 +606,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
           documents.push({
             id: `pg_${config.database}_${config.table_name}_${row.id}_${index}`,
             content: chunk,
-            title: config.title || `PG Row ID ${row.id}`,
+            title: fileName || `PG Row ID ${row.id}`,
             description: config.description || "No description",
             image: config.image || null,
             category: config.category,
@@ -605,7 +624,9 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
     return { data: documents, lastProcessedId };
   } catch (error) {
     console.error("Error during PostgreSQL Sync:", error.message);
-    throw new Error("Failed to fetch and process field content");
+    throw new Error(
+      "Failed to fetch content from mysql connection. Check the name of fields specified correctly."
+    );
   } finally {
     await client.end();
   }
@@ -620,7 +641,7 @@ async function registerPostgreSQLConnection(config) {
       config.database,
       config.table_name,
       config.field_name,
-      config.field_type,
+      config.title_field,
       config.category,
       config.coid,
       config.lastProcessedId

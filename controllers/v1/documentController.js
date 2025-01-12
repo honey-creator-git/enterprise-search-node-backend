@@ -2548,7 +2548,7 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
     db_database,
     table_name,
     field_name,
-    field_type,
+    title_field,
     json_properties, // For JSON fields
     xml_paths, // For XML fields
     name,
@@ -2573,61 +2573,70 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
     checkExistOfPostgreSQLConfigResponse ===
     "PostgreSQL configuration is not existed"
   ) {
-    const esNewCategoryResponse = await axios.post(
-      "https://es-services.onrender.com/api/v1/category",
-      {
-        name: name,
-        type: type,
-      },
-      {
-        headers: {
-          Authorization: req.headers["authorization"],
-          "Content-Type": "application/json",
+    try {
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: name,
+          type: type,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      const newCategoryId =
+        esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    const result = await fetchAndProcessFieldContentOfPostgreSQL({
-      host: db_host,
-      user: db_user,
-      password: db_password,
-      database: db_database,
-      table_name: table_name,
-      field_name: field_name,
-      field_type: field_type,
-      json_properties: json_properties,
-      xml_paths: xml_paths,
-      category: newCategoryId,
-    });
-
-    const fileData = result.data;
-    const lastProcessedId = result.lastProcessedId;
-
-    const registerPostgreSQLConnectionRes = await registerPostgreSQLConnection({
-      host: db_host,
-      user: db_user,
-      password: db_password,
-      database: db_database,
-      table_name: table_name,
-      field_name: field_name,
-      field_type: field_type.toLowerCase(),
-      category: newCategoryId,
-      coid: req.coid,
-      lastProcessedId: lastProcessedId,
-    });
-
-    if (fileData.length > 0) {
-      const syncResponse = await pushToAzureSearch(fileData, req.coid);
-      return res.status(200).json({
-        messag: "Sync Successful",
-        data: syncResponse,
-        postgresql: registerPostgreSQLConnectionRes,
+      const result = await fetchAndProcessFieldContentOfPostgreSQL({
+        host: db_host,
+        user: db_user,
+        password: db_password,
+        database: db_database,
+        table_name: table_name,
+        field_name: field_name,
+        title_field: title_field,
+        json_properties: json_properties,
+        xml_paths: xml_paths,
+        category: newCategoryId,
       });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync.",
+
+      const fileData = result.data;
+      const lastProcessedId = result.lastProcessedId;
+
+      const registerPostgreSQLConnectionRes =
+        await registerPostgreSQLConnection({
+          host: db_host,
+          user: db_user,
+          password: db_password,
+          database: db_database,
+          table_name: table_name,
+          field_name: field_name,
+          title_field: title_field,
+          category: newCategoryId,
+          coid: req.coid,
+          lastProcessedId: lastProcessedId,
+        });
+
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        return res.status(200).json({
+          messag: "Sync Successful",
+          data: syncResponse,
+          postgresql: registerPostgreSQLConnectionRes,
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync.",
+        });
+      }
+    } catch (error) {
+      return res.status(400).json({
+        message: "PostgreSQL Sync failed",
+        error: error.message,
       });
     }
   } else {
