@@ -522,6 +522,11 @@ async function fetchAndProcessFieldContentOfMySQL(config) {
       data: documents,
       lastProcessedId,
     };
+  } catch (error) {
+    console.error(`Failed to fetch content ::: ${error.message}`);
+    throw new Error(
+      "Failed to fetch content from mysql connection. Check the name of fields specified correctly."
+    );
   } finally {
     await connection.end();
   }
