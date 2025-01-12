@@ -573,7 +573,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
         ) {
           console.log(`Detected MIME type: ${mimeType}`);
           // Process BLOB Field
-          const { extractedText, mimeType } = await processBlobField(
+          const { extractedText } = await processBlobField(
             fileBuffer,
             mimeType
           );
