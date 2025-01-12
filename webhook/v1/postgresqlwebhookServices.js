@@ -4,6 +4,7 @@ const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const textract = require("textract");
+const iconv = require("iconv-lite");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
