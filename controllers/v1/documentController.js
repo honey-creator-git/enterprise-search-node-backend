@@ -2468,61 +2468,68 @@ exports.syncMySQLDatabase = async (req, res) => {
   if (
     checkExistOfMySQLConfigResponse === "MySQL configuration is not existed"
   ) {
-    const esNewCategoryResponse = await axios.post(
-      "https://es-services.onrender.com/api/v1/category",
-      {
-        name: name,
-        type: type,
-      },
-      {
-        headers: {
-          Authorization: req.headers["authorization"],
-          "Content-Type": "application/json",
+    try {
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: name,
+          type: type,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      const newCategoryId =
+        esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    const result = await fetchAndProcessFieldContentOfMySQL({
-      host: db_host,
-      user: db_user,
-      password: db_password,
-      database: db_database,
-      table_name: table_name,
-      field_name: field_name,
-      title_field: title_field,
-      json_properties: json_properties,
-      xml_paths: xml_paths,
-      category: newCategoryId,
-    });
-
-    const fileData = result.data;
-    const lastProcessedId = result.lastProcessedId;
-
-    const registerMySQLConnectionRes = await registerMySQLConnection({
-      host: db_host,
-      user: db_user,
-      password: db_password,
-      database: db_database,
-      table_name: table_name,
-      field_name: field_name,
-      title_field: title_field,
-      category: newCategoryId,
-      coid: req.coid,
-      lastProcessedId: lastProcessedId,
-    });
-
-    if (fileData.length > 0) {
-      const syncResponse = await pushToAzureSearch(fileData, req.coid);
-      return res.status(200).json({
-        message: "Sync Successful",
-        data: syncResponse,
-        mysql: registerMySQLConnectionRes,
+      const result = await fetchAndProcessFieldContentOfMySQL({
+        host: db_host,
+        user: db_user,
+        password: db_password,
+        database: db_database,
+        table_name: table_name,
+        field_name: field_name,
+        title_field: title_field,
+        json_properties: json_properties,
+        xml_paths: xml_paths,
+        category: newCategoryId,
       });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync.",
+
+      const fileData = result.data;
+      const lastProcessedId = result.lastProcessedId;
+
+      const registerMySQLConnectionRes = await registerMySQLConnection({
+        host: db_host,
+        user: db_user,
+        password: db_password,
+        database: db_database,
+        table_name: table_name,
+        field_name: field_name,
+        title_field: title_field,
+        category: newCategoryId,
+        coid: req.coid,
+        lastProcessedId: lastProcessedId,
+      });
+
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        return res.status(200).json({
+          message: "Sync Successful",
+          data: syncResponse,
+          mysql: registerMySQLConnectionRes,
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync.",
+        });
+      }
+    } catch (error) {
+      return res.status(400).json({
+        message: error.messag,
       });
     }
   } else {
