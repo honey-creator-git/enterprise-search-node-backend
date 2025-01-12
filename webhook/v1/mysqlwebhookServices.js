@@ -194,10 +194,24 @@ function normalizeEncoding(buffer) {
 }
 
 // Detect MIME Type from Buffer
-async function detectMimeType(buffer) {
+async function detectMimeType(input) {
   const { fileTypeFromBuffer } = await import("file-type");
 
   try {
+    let buffer;
+
+    // Check if the input is a string
+    if (typeof input === "string") {
+      console.log("Input is a string, converting to buffer...");
+      buffer = Buffer.from(input, "utf-8");
+    } else if (input instanceof Uint8Array || input instanceof ArrayBuffer) {
+      buffer = Buffer.from(input);
+    } else {
+      throw new Error(
+        "Expected the 'input' argument to be of type 'Uint8Array', 'ArrayBuffer', or 'string'."
+      );
+    }
+
     console.log(
       "Buffer first 20 bytes (hex):",
       buffer.slice(0, 20).toString("hex")
