@@ -522,7 +522,9 @@ async function fetchAndProcessFieldContent(config) {
     return documents;
   } catch (error) {
     console.error("Error during MSSQL Sync:", error.message);
-    throw new Error("Failed to fetch and process field content");
+    throw new Error(
+      "Failed to fetch content from mssql connection. Check the name of fields specified correctly."
+    );
   } finally {
     await connection.close();
   }
