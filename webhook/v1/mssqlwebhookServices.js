@@ -347,27 +347,21 @@ async function fetchAndProcessFieldContent(config) {
   const connection = await sql.connect(dbConfig);
 
   try {
-    // Step 1: Check and Create Change Log Table
-    const changeLogTable = `${config.table_name}_ChangeLog`;
-
-    // Dynamically detect the primary key field
-    const primaryKeyQuery = `
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
-        AND TABLE_NAME = '${config.table_name}';
+    // Step 1: Check and Validate the Title Field
+    const columnValidationQuery = `
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = '${config.table_name}' AND COLUMN_NAME = '${config.title_field}';
     `;
+    const columnValidationResult = await connection.query(columnValidationQuery);
 
-    const primaryKeyResult = await connection.query(primaryKeyQuery);
-    let primaryKeyField = primaryKeyResult.recordset[0]?.COLUMN_NAME;
-
-    if (!primaryKeyField) {
-      console.log(
-        `No primary key detected. Using ROW_NUMBER as a fallback for table: ${config.table_name}`
+    if (!columnValidationResult.recordset.length) {
+      throw new Error(
       );
-      primaryKeyField =
-        "ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS RowNumber";
     }
+
+    // Step 2: Check and Create Change Log Table
+    const changeLogTable = `${config.table_name}_ChangeLog`;
 
     const checkChangeLogTableQuery = `
         IF NOT EXISTS (
@@ -389,44 +383,62 @@ async function fetchAndProcessFieldContent(config) {
     `;
     await connection.query(checkChangeLogTableQuery);
 
-    // Step 2: Check and Create Trigger
+    // Step 3: Check and Create Trigger
+    const primaryKeyQuery = `
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+        AND TABLE_NAME = '${config.table_name}';
+    `;
+
+    const primaryKeyResult = await connection.query(primaryKeyQuery);
+    let primaryKeyField = primaryKeyResult.recordset[0]?.COLUMN_NAME;
+
+    if (!primaryKeyField) {
+      console.log(
+        `No primary key detected. Using ROW_NUMBER as a fallback for table: ${config.table_name}`
+      );
+      primaryKeyField =
+        "ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS RowNumber";
+    }
+
     const checkTriggerQuery = `
-            IF NOT EXISTS (
-                SELECT * FROM sys.triggers 
-                WHERE name = 'trg_${config.table_name}_ChangeLog'
-            )
-            BEGIN
-                EXEC('
-                    CREATE TRIGGER trg_${config.table_name}_ChangeLog
-                    ON dbo.[${config.table_name}]
-                    AFTER INSERT, UPDATE
-                    AS
+        IF NOT EXISTS (
+            SELECT * FROM sys.triggers 
+            WHERE name = 'trg_${config.table_name}_ChangeLog'
+        )
+        BEGIN
+            EXEC('
+                CREATE TRIGGER trg_${config.table_name}_ChangeLog
+                ON dbo.[${config.table_name}]
+                AFTER INSERT, UPDATE
+                AS
+                BEGIN
+                    SET NOCOUNT ON;
+                    IF EXISTS (SELECT * FROM inserted)
                     BEGIN
-                        SET NOCOUNT ON;
-                        IF EXISTS (SELECT * FROM inserted)
-                        BEGIN
-                            INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, Title, ChangedField, OldValue, NewValue, ChangeTime)
-                            SELECT
-                                CASE
-                                    WHEN EXISTS (SELECT * FROM deleted) THEN ''UPDATE''
-                                    ELSE ''INSERT''
-                                END AS ActionType,
-                                CAST(i.${primaryKeyField} AS NVARCHAR(MAX)) AS RowID, -- Use dynamic primary key field
-                                i.${config.title_field} AS Title, -- Dynamically reference the Title field
-                                ''${config.field_name}'' AS ChangedField,
-                                CAST(d.${config.field_name} AS NVARCHAR(MAX)) AS OldValue,
-                                CAST(i.${config.field_name} AS NVARCHAR(MAX)) AS NewValue,
-                                GETDATE() AS ChangeTime
-                            FROM inserted i
-                            LEFT JOIN deleted d ON i.${primaryKeyField} = d.${primaryKeyField};
-                        END
+                        INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, Title, ChangedField, OldValue, NewValue, ChangeTime)
+                        SELECT
+                            CASE
+                                WHEN EXISTS (SELECT * FROM deleted) THEN ''UPDATE''
+                                ELSE ''INSERT''
+                            END AS ActionType,
+                            CAST(i.${primaryKeyField} AS NVARCHAR(MAX)) AS RowID, -- Use dynamic primary key field
+                            ISNULL(i.${config.title_field}, ''Unknown Title'') AS Title, -- Handle null values with fallback
+                            ''${config.field_name}'' AS ChangedField,
+                            CAST(d.${config.field_name} AS NVARCHAR(MAX)) AS OldValue,
+                            CAST(i.${config.field_name} AS NVARCHAR(MAX)) AS NewValue,
+                            GETDATE() AS ChangeTime
+                        FROM inserted i
+                        LEFT JOIN deleted d ON i.${primaryKeyField} = d.${primaryKeyField};
                     END
-                ');
-            END
-        `;
+                END
+            ');
+        END
+    `;
     await connection.query(checkTriggerQuery);
 
-    // Step 3: Fetch Data from the Table (Including File Size and Uploaded Time)
+    // Step 4: Fetch Data from the Table (Including File Size and Uploaded Time)
     const query = `
         SELECT ${primaryKeyField} AS RowID,
                ${config.title_field} AS title,
@@ -436,7 +448,6 @@ async function fetchAndProcessFieldContent(config) {
         FROM [dbo].[${config.table_name}]
         ORDER BY ${primaryKeyField} ASC
     `;
-    console.log("Database Configuration:", dbConfig);
     console.log("Executing Query:", query);
 
     const result = await connection.query(query);
@@ -449,7 +460,7 @@ async function fetchAndProcessFieldContent(config) {
 
     console.log(`Fetched ${rows.length} new rows from the table.`);
 
-    // Step 4: Process Data
+    // Step 5: Process Data
     const documents = [];
 
     for (const row of rows) {
@@ -523,7 +534,7 @@ async function fetchAndProcessFieldContent(config) {
   } catch (error) {
     console.error("Error during MSSQL Sync:", error.message);
     throw new Error(
-      "Failed to fetch content from mssql connection. Check the name of fields specified correctly."
+      "Failed to fetch content from MSSQL connection. Check the name of fields specified correctly."
     );
   } finally {
     await connection.close();
