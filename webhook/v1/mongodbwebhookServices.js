@@ -334,7 +334,7 @@ async function saveMongoDBConnection(
   database,
   collection_name,
   field_name,
-  field_type,
+  title_field,
   category,
   coid
 ) {
@@ -346,7 +346,7 @@ async function saveMongoDBConnection(
       database,
       collection_name,
       field_name,
-      field_type,
+      title_field,
       category,
       coid,
       updatedAt: new Date().toISOString(),
@@ -369,7 +369,7 @@ async function saveMongoDBConnection(
               database: { type: "text" },
               collection_name: { type: "text" },
               field_name: { type: "text" },
-              field_type: { type: "text" },
+              title_field: { type: "text" },
               category: { type: "text" },
               coid: { type: "keyword" },
               updatedAt: { type: "date" },
@@ -427,24 +427,22 @@ async function fetchDataFromMongoDB(config) {
 
     console.log(`Fetching data from collection: ${config.collection_name}...`);
 
-    // Fetch all documents from the collection (optionally apply filters)
-    const query = {}; // Empty empty to fetch all documents. Add filters here if needed.
-    const cursor = collection.find(query);
-    const documents = await cursor.toArray();
-    const files = await bucket.find().toArray();
-
+    // Detect whether the collection contains GridFS files or regular documents
+    const gridFsFiles = await bucket.find().limit(1).toArray();
+    const isGridFs = gridFsFiles.length > 0;
     const data = [];
 
-    if (config.field_type.toLowerCase() === "blob") {
+    if (isGridFs) {
+      console.log("Detected GridFS collection. Processing files...");
+      const files = await bucket.find().toArray();
       for (const file of files) {
         let processedContent;
         let fileUrl;
+        const downloadStream = bucket.openDownloadStream(file._id);
+        const buffer = await streamToBuffer(downloadStream);
+        const fileName = file[config.title_field];
 
         try {
-          const downloadStream = bucket.openDownloadStream(file._id);
-          const buffer = await streamToBuffer(downloadStream);
-          const fileName = `mongodb_${config.database}_${config.collection_name}_file_${file._id}`;
-
           // Detect and process MIME Types
           const { extractedText, mimeType } = await processBlobField(buffer);
 
@@ -471,7 +469,7 @@ async function fetchDataFromMongoDB(config) {
             data.push({
               id: `mongodb_${config.database}_${config.collection_name}_${file._id}_${index}`,
               content: chunk,
-              title: config.title || `MongoDB Row ID ${file._id}`,
+              title: fileName,
               description: config.description || "No description",
               image: config.image || null,
               category: config.category,
@@ -483,8 +481,14 @@ async function fetchDataFromMongoDB(config) {
         }
       }
     } else {
+      console.log(
+        "Detected regular documents collection. Processing documents..."
+      );
+      const documents = await collection.find({}).toArray();
+
       for (const document of documents) {
         let processedContent;
+        const fileName = document[config.title_field];
 
         try {
           // Process the content based on field type
@@ -506,7 +510,7 @@ async function fetchDataFromMongoDB(config) {
           data.push({
             id: document._id.toString(),
             content: processedContent,
-            title: config.title || `MongoDB Row ID ${document._id}`, // Use provided title or fallback
+            title: fileName, // Use provided title or fallback
             description: config.description || "No description provided",
             image: config.image || null,
             category: config.category,
@@ -537,7 +541,7 @@ async function registerMongoDBConnection(config) {
       config.database,
       config.collection_name,
       config.field_name,
-      config.field_type,
+      config.title_field,
       config.category,
       config.coid
     );

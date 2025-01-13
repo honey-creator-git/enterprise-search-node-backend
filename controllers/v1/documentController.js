@@ -2652,7 +2652,7 @@ exports.syncMongoData = async (req, res) => {
     db_name,
     collection_name,
     field_name,
-    field_type,
+    title_field,
     json_properties,
     xml_paths,
     name,
@@ -2683,55 +2683,63 @@ exports.syncMongoData = async (req, res) => {
   if (
     checkExistofMongoDBConfigResponse === "MongoDB configuration does not exist"
   ) {
-    const esNewCategoryResponse = await axios.post(
-      "https://es-services.onrender.com/api/v1/category",
-      {
-        name: name,
-        type: type,
-      },
-      {
-        headers: {
-          Authorization: req.headers["authorization"],
-          "Content-Type": "application/json",
+    try {
+      const esNewCategoryResponse = await axios.post(
+        "https://es-services.onrender.com/api/v1/category",
+        {
+          name: name,
+          type: type,
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: req.headers["authorization"],
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    const newCategoryId = esNewCategoryResponse.data.elasticsearchResponse._id;
+      const newCategoryId =
+        esNewCategoryResponse.data.elasticsearchResponse._id;
 
-    const result = await fetchDataFromMongoDB({
-      mongoUri: mongodb_uri,
-      database: db_name,
-      collection_name: collection_name,
-      field_name: field_name,
-      field_type: field_type,
-      json_properties: json_properties,
-      xml_paths: xml_paths,
-      category: newCategoryId,
-    });
-
-    const fileData = result.data;
-
-    const registerMongoDBConnectionRes = await registerMongoDBConnection({
-      mongoUri: mongodb_uri,
-      database: db_name,
-      collection_name: collection_name,
-      field_name: field_name,
-      field_type: field_type.toLowerCase(),
-      category: newCategoryId,
-      coid: req.coid,
-    });
-
-    if (fileData.length > 0) {
-      const syncResponse = await pushToAzureSearch(fileData, req.coid);
-      return res.status(200).json({
-        message: "Sync Successful",
-        data: syncResponse,
-        mongodb: registerMongoDBConnectionRes,
+      const result = await fetchDataFromMongoDB({
+        mongoUri: mongodb_uri,
+        database: db_name,
+        collection_name: collection_name,
+        field_name: field_name,
+        title_field: title_field,
+        json_properties: json_properties,
+        xml_paths: xml_paths,
+        category: newCategoryId,
       });
-    } else {
-      return res.status(200).json({
-        message: "No valid files to sync.",
+
+      const fileData = result.data;
+
+      const registerMongoDBConnectionRes = await registerMongoDBConnection({
+        mongoUri: mongodb_uri,
+        database: db_name,
+        collection_name: collection_name,
+        field_name: field_name,
+        title_field: title_field,
+        category: newCategoryId,
+        coid: req.coid,
+      });
+
+      if (fileData.length > 0) {
+        const syncResponse = await pushToAzureSearch(fileData, req.coid);
+        return res.status(200).json({
+          message: "Sync Successful",
+          data: syncResponse,
+          mongodb: registerMongoDBConnectionRes,
+        });
+      } else {
+        return res.status(200).json({
+          message: "No valid files to sync.",
+        });
+      }
+    } catch (error) {
+      return res.status(400).json({
+        message: "MongoDB Sync failed",
+        error: error.message,
       });
     }
   } else {
