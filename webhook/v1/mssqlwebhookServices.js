@@ -357,6 +357,7 @@ async function fetchAndProcessFieldContent(config) {
 
     if (!columnValidationResult.recordset.length) {
       throw new Error(
+        `Invalid column name '${config.title_field}' provided for table '${config.table_name}'.`
       );
     }
 
