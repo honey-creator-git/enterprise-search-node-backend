@@ -2757,7 +2757,7 @@ exports.syncMSSQLDatabase = async (req, res) => {
     db_database,
     table_name,
     field_name,
-    field_type,
+    title_field,
     json_properties, // For JSON fields
     xml_paths, // For XML fields
     name,
@@ -2808,7 +2808,7 @@ exports.syncMSSQLDatabase = async (req, res) => {
         db_database,
         table_name,
         field_name,
-        field_type,
+        title_field,
         json_properties,
         xml_paths,
         category: newCategoryId,
@@ -2824,7 +2824,7 @@ exports.syncMSSQLDatabase = async (req, res) => {
         database: db_database,
         table_name: table_name,
         field_name: field_name,
-        field_type: field_type.toLowerCase(),
+        title_field: title_field,
         category: newCategoryId,
         coid: req.coid,
       });

@@ -5,6 +5,7 @@ const pdfParse = require("pdf-parse");
 const cheerio = require("cheerio");
 const textract = require("textract");
 const sql = require("mssql");
+const iconv = require("iconv-lite");
 
 async function extractTextFromCsv(content) {
   return content; // Process CSV content if needed
@@ -192,10 +193,24 @@ function normalizeEncoding(buffer) {
 }
 
 // Detect MIME Type from Buffer
-async function detectMimeType(buffer) {
+async function detectMimeType(input) {
   const { fileTypeFromBuffer } = await import("file-type");
 
   try {
+    let buffer;
+
+    // Check if the input is a string
+    if (typeof input === "string") {
+      console.log("Input is a string, converting to buffer...");
+      buffer = Buffer.from(input, "utf-8");
+    } else if (input instanceof Uint8Array || input instanceof ArrayBuffer) {
+      buffer = Buffer.from(input);
+    } else {
+      throw new Error(
+        "Expected the 'input' argument to be of type 'Uint8Array', 'ArrayBuffer', or 'string'."
+      );
+    }
+
     console.log(
       "Buffer first 20 bytes (hex):",
       buffer.slice(0, 20).toString("hex")
@@ -252,11 +267,9 @@ function isUtf8(buffer) {
 }
 
 // Process BLOB field for text extraction
-async function processBlobField(fileBuffer) {
+async function processBlobField(fileBuffer, mimeType) {
   let extractedText = "";
-  const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
-
-  console.log(`Mime Type MSSQL => ${mimeType}`);
+  // const mimeType = await detectMimeType(fileBuffer); // Detect MIME dynamically
 
   try {
     switch (mimeType) {
@@ -366,6 +379,7 @@ async function fetchAndProcessFieldContent(config) {
                 LogID INT IDENTITY PRIMARY KEY,
                 ActionType NVARCHAR(50),
                 RowID NVARCHAR(MAX), -- Store dynamic row identifier
+                Title NVARCHAR(255),
                 ChangedField NVARCHAR(255),
                 OldValue NVARCHAR(MAX),
                 NewValue NVARCHAR(MAX),
@@ -391,13 +405,14 @@ async function fetchAndProcessFieldContent(config) {
                         SET NOCOUNT ON;
                         IF EXISTS (SELECT * FROM inserted)
                         BEGIN
-                            INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, ChangedField, OldValue, NewValue, ChangeTime)
+                            INSERT INTO dbo.[${changeLogTable}] (ActionType, RowID, Title, ChangedField, OldValue, NewValue, ChangeTime)
                             SELECT
                                 CASE
                                     WHEN EXISTS (SELECT * FROM deleted) THEN ''UPDATE''
                                     ELSE ''INSERT''
                                 END,
                                 CAST(i.${primaryKeyField} AS NVARCHAR(MAX)), -- Use dynamic primary key field
+                                ''${config.title_field}''
                                 ''${config.field_name}'',
                                 CAST(d.${config.field_name} AS NVARCHAR(MAX)),
                                 CAST(i.${config.field_name} AS NVARCHAR(MAX)),
@@ -413,7 +428,8 @@ async function fetchAndProcessFieldContent(config) {
 
     // Step 3: Fetch Data from the Table (Including File Size and Uploaded Time)
     const query = `
-        SELECT ${primaryKeyField} AS RowID, 
+        SELECT ${primaryKeyField} AS RowID,
+               ${config.title_field} AS title,
                [${config.field_name}] AS field_value,
                DATALENGTH([${config.field_name}]) AS file_size,
                GETDATE() AS uploaded_at
@@ -440,33 +456,37 @@ async function fetchAndProcessFieldContent(config) {
       let processedContent;
       let fileUrl = "";
       const fileSizeInMB = (row.file_size / (1024 * 1024)).toFixed(2); // Convert to MB
+      const fileBuffer = row.field_value;
+      const fileName = row.title;
 
       try {
-        const fileBuffer = row.field_value;
-        const fileName = `mssql_${config.db_database}_${config.table_name}_file_${row.RowID}`;
-        console.log("Config Field Type => ", config.field_type);
+        const mimeType = await detectMimeType(fileBuffer);
 
-        if (config.field_type.toLowerCase() === "blob") {
+        if (
+          mimeType.startsWith("application/") ||
+          mimeType === "text/html" ||
+          mimeType === "text/csv" ||
+          mimeType === "text/xml" ||
+          mimeType === "text/plain"
+        ) {
+          console.log(`Detected MIME type: ${mimeType}`);
           // Process BLOB Field
-          const { extractedText, mimeType } = await processBlobField(
-            fileBuffer
+          const { extractedText } = await processBlobField(
+            fileBuffer,
+            mimeType
           );
 
           // Upload to Azure Blob Storage
           fileUrl = await uploadFileToBlob(fileBuffer, fileName, mimeType);
+
           console.log("File URL => ", fileUrl);
 
-          // Assign extracted text
           processedContent = extractedText;
+
           console.log("Extracted text from buffer => ", processedContent);
         } else {
-          // Handle text, JSON, or XML fields
-          processedContent = await processFieldContent(
-            row.field_value,
-            config.field_type,
-            config.json_properties,
-            config.xml_paths
-          );
+          console.log("Unsupported MIME type:", mimeType);
+          continue;
         }
       } catch (error) {
         console.error(
@@ -483,7 +503,7 @@ async function fetchAndProcessFieldContent(config) {
           documents.push({
             id: `mssql_${config.database}_${config.table_name}_${row.RowID}_${index}`,
             content: chunk,
-            title: config.title || `MSSQL Row ID ${row.RowID}`,
+            title: fileName || `MSSQL Row ID ${row.RowID}`,
             description: config.description || "No description provided",
             image: config.image || null,
             category: config.category,
@@ -515,7 +535,7 @@ async function saveMSSQLConnection({
   database,
   table_name,
   field_name,
-  field_type,
+  title_field,
   category,
   coid,
 }) {
@@ -533,7 +553,7 @@ async function saveMSSQLConnection({
       database,
       table_name,
       field_name,
-      field_type,
+      title_field,
       category,
       coid,
       updatedAt: new Date().toISOString(),
@@ -560,7 +580,7 @@ async function saveMSSQLConnection({
               database: { type: "text" },
               table_name: { type: "text" },
               field_name: { type: "text" },
-              field_type: { type: "text" },
+              title_field: { type: "text" },
               category: { type: "text" },
               coid: { type: "keyword" },
               updatedAt: { type: "date" },
