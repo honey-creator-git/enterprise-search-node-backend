@@ -410,13 +410,13 @@ async function fetchAndProcessFieldContent(config) {
                                 CASE
                                     WHEN EXISTS (SELECT * FROM deleted) THEN ''UPDATE''
                                     ELSE ''INSERT''
-                                END,
-                                CAST(i.${primaryKeyField} AS NVARCHAR(MAX)), -- Use dynamic primary key field
-                                ''${config.title_field}''
-                                ''${config.field_name}'',
-                                CAST(d.${config.field_name} AS NVARCHAR(MAX)),
-                                CAST(i.${config.field_name} AS NVARCHAR(MAX)),
-                                GETDATE()
+                                END AS ActionType,
+                                CAST(i.${primaryKeyField} AS NVARCHAR(MAX)) AS RowID, -- Use dynamic primary key field
+                                i.${config.title_field} AS Title, -- Dynamically reference the Title field
+                                ''${config.field_name}'' AS ChangedField,
+                                CAST(d.${config.field_name} AS NVARCHAR(MAX)) AS OldValue,
+                                CAST(i.${config.field_name} AS NVARCHAR(MAX)) AS NewValue,
+                                GETDATE() AS ChangeTime
                             FROM inserted i
                             LEFT JOIN deleted d ON i.${primaryKeyField} = d.${primaryKeyField};
                         END
