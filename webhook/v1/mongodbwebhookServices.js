@@ -491,13 +491,17 @@ async function fetchDataFromMongoDB(config) {
         const fileName = document[config.title_field];
 
         try {
-          // Process the content based on field type
-          processedContent = await processFieldContent(
-            document[config.field_name],
-            config.field_type,
-            config.json_properties,
-            config.xml_paths
-          );
+          // Process the content dynamically based on its structure
+          if (typeof document === "string" || typeof document === "number") {
+            processedContent = document.toString();
+          } else if (Buffer.isBuffer(document)) {
+            const { extractedText } = await processBlobField(document);
+            processedContent = extractedText;
+          } else if (typeof document === "object") {
+            processedContent = JSON.stringify(document, null, 2);
+          } else {
+            processedContent = document.toString();
+          }
         } catch (error) {
           console.error(
             `Failed to process content for row ID ${document._id}:`,
