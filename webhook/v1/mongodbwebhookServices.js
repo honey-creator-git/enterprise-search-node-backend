@@ -502,6 +502,15 @@ async function fetchDataFromMongoDB(config) {
           } else {
             processedContent = document.toString();
           }
+
+          // Upload to Azure Blob Storage
+          const buffer = Buffer.from(processedContent, "utf-8");
+          fileUrl = await uploadFileToBlob(
+            buffer,
+            `${fileName || "document"}.txt`,
+            "text/plain"
+          );
+          console.log("File URL => ", fileUrl);
         } catch (error) {
           console.error(
             `Failed to process content for row ID ${document._id}:`,
