@@ -487,6 +487,7 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
                 action_type VARCHAR(50),
                 row_id INT,
                 changed_field VARCHAR(255),
+                title TEXT,
                 old_value TEXT,
                 new_value TEXT,
                 change_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -502,11 +503,11 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
             RETURNS TRIGGER AS $$
             BEGIN
                 IF TG_OP = 'INSERT' THEN
-                    INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, old_value, new_value)
-                    VALUES ('INSERT', NEW.id, '${config.field_name}', NULL, NEW.${config.field_name});
+                    INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, title, old_value, new_value)
+                    VALUES ('INSERT', NEW.id, '${config.field_name}', '${config.title_field}', NULL, NEW.${config.field_name});
                 ELSIF TG_OP = 'UPDATE' THEN
-                    INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, old_value, new_value)
-                    VALUES ('UPDATE', NEW.id, '${config.field_name}', OLD.${config.field_name}, NEW.${config.field_name});
+                    INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, title, old_value, new_value)
+                    VALUES ('UPDATE', NEW.id, '${config.field_name}', '${config.title_field}', OLD.${config.field_name}, NEW.${config.field_name});
                 END IF;
                 RETURN NEW;
             END;
