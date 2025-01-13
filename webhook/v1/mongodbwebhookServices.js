@@ -489,6 +489,7 @@ async function fetchDataFromMongoDB(config) {
       for (const document of documents) {
         let processedContent;
         const fileName = document[config.title_field];
+        let fileUrl;
 
         try {
           // Process the content dynamically based on its structure
@@ -527,7 +528,7 @@ async function fetchDataFromMongoDB(config) {
             description: config.description || "No description provided",
             image: config.image || null,
             category: config.category,
-            fileUrl: "",
+            fileUrl: fileUrl,
             fileSize: null, // Not applicable for non-GridFS documents
             uploadedAt: document.uploadDate || new Date(), // Use uploadDate or current time
           });
