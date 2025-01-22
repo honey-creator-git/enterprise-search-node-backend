@@ -504,10 +504,10 @@ async function fetchAndProcessFieldContentOfPostgreSQL(config) {
             BEGIN
                 IF TG_OP = 'INSERT' THEN
                     INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, title, old_value, new_value)
-                    VALUES ('INSERT', NEW.id, '${config.field_name}', '${config.title_field}', NULL, NEW.${config.field_name});
+                    VALUES ('INSERT', NEW.id, '${config.field_name}', NEW.${config.title_field}, NULL, NEW.${config.field_name});
                 ELSIF TG_OP = 'UPDATE' THEN
                     INSERT INTO ${changeLogTable} (action_type, row_id, changed_field, title, old_value, new_value)
-                    VALUES ('UPDATE', NEW.id, '${config.field_name}', '${config.title_field}', OLD.${config.field_name}, NEW.${config.field_name});
+                    VALUES ('UPDATE', NEW.id, '${config.field_name}', NEW.${config.title_field}, OLD.${config.field_name}, NEW.${config.field_name});
                 END IF;
                 RETURN NEW;
             END;
