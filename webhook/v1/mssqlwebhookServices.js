@@ -513,7 +513,7 @@ async function fetchAndProcessFieldContent(config) {
         const chunks = splitLargeText(processedContent);
         chunks.forEach((chunk, index) => {
           documents.push({
-            id: `mssql_${config.database}_${config.table_name}_${row.RowID}_${index}`,
+            id: `mssql_${config.db_database}_${config.table_name}_${row.RowID}_${index}`,
             content: chunk,
             title: fileName || `MSSQL Row ID ${row.RowID}`,
             description: config.description || "No description provided",
