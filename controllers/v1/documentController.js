@@ -916,9 +916,14 @@ exports.getUserCategories = async (req, res) => {
     });
 
     // Extract and format the categories from the search response
-    const userCategories = categoryResponse.hits.hits.flatMap((hit) =>
-      hit._source.categories.split(",").map((category) => category.trim())
-    );
+    const userCategories = categoryResponse.hits.hits.flatMap((hit) => {
+      // Safely access and split the categories field
+      const categories = hit._source.categories || ""; // Fallback to empty string if undefined
+      return categories
+        .split(",") // Split by commas
+        .map((category) => category.trim()) // Trim whitespace
+        .filter((category) => category !== ""); // Remove empty strings
+    });
 
     // Remove duplicates
     const uniqueCategories = [...new Set(userCategories)];
