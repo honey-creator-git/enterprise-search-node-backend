@@ -70,7 +70,7 @@ const {
   uploadFileToBlob,
   getContainerStats,
 } = require("../../services/v1/blobStorage");
-const wsServerUrl = "wss://enterprise-search-node-websocket.onrender.com";
+const wsServerUrl = "wss://enterprise-search-node-websocket-c2ua.onrender.com";
 const ws = new WebSocket(wsServerUrl);
 require("dotenv").config();
 
@@ -1060,6 +1060,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
   const indexName = `users_${req.coid.toLowerCase()}`;
   const categoryIndexName = `category_user_${req.coid.toLowerCase()}`;
   const categoriesIndexName = `datasources_${req.coid.toLowerCase()}`;
+  const searchLogIndexName = `search_logs_${req.coid.toLowerCase()}`;
   const tenantIndexName = `tenant_${req.coid.toLowerCase()}`;
 
   const name = req.name;
@@ -1107,6 +1108,17 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       },
     };
 
+    const searchLogsIndexMapping = {
+      mappings: {
+        properties: {
+          userId: { type: "text" },
+          query: { type: "text" },
+          clickedDocumentId: { type: "text" },
+          timestamp: { type: "date" },
+        },
+      },
+    };
+
     // Ensure each index exists in Elasticsearch
     await createIndexIfNotExists(client, indexName, usersIndexMapping);
     await createIndexIfNotExists(
@@ -1118,6 +1130,11 @@ exports.decodeUserTokenAndSave = async (req, res) => {
       client,
       categoryIndexName,
       categoryUserIndexMapping
+    );
+    await createIndexIfNotExists(
+      client,
+      searchLogIndexName,
+      searchLogsIndexMapping
     );
 
     // Azure API URLs
@@ -1212,6 +1229,26 @@ exports.decodeUserTokenAndSave = async (req, res) => {
               sortable: true,
               facetable: false,
             },
+            {
+              name: "searchCount",
+              type: "Edm.Int32",
+              filterable: true,
+              sortable: true,
+              facetable: true,
+            },
+            {
+              name: "clickCount",
+              type: "Edm.Int32",
+              filterable: true,
+              sortable: true,
+              facetable: true,
+            },
+            {
+              name: "lastViewedAt",
+              type: "Edm.DateTimeOffset",
+              filterable: true,
+              sortable: true
+            }
           ],
           suggesters: [
             {
@@ -1382,7 +1419,7 @@ exports.decodeUserTokenAndSave = async (req, res) => {
     // broadcastToAdmins(adminMessage);
 
     const ws = new WebSocket(
-      "wss://enterprise-search-node-websocket.onrender.com"
+      "wss://enterprise-search-node-websocket-c2ua.onrender.com"
     );
 
     // Send the message to the WebSocket server
@@ -1775,7 +1812,7 @@ exports.syncGoogleDrive = async (req, res) => {
   } = req.body;
 
   const webhookUrl =
-    "https://es-services.onrender.com/api/v1/sync-google-drive/webhook";
+    "https://es-services-xckw.onrender.com/api/v1/sync-google-drive/webhook";
 
   // Initialize Google Drive API Client
   const auth = new google.auth.OAuth2(client_id, client_secret);
@@ -1798,7 +1835,7 @@ exports.syncGoogleDrive = async (req, res) => {
     checkExistOfGoogleDriveConfigResponse === "configuration is not existed"
   ) {
     const esNewCategoryResponse = await axios.post(
-      "https://es-services.onrender.com/api/v1/category",
+      "https://es-services-xckw.onrender.com/api/v1/category",
       {
         name: name,
         type: type,
@@ -2215,7 +2252,7 @@ exports.syncOneDrive = async (req, res) => {
       console.log("Expiration Time => ", expirationDateTime);
 
       const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
+        "https://es-services-xckw.onrender.com/api/v1/category",
         {
           name: name,
           type: type,
@@ -2475,7 +2512,7 @@ exports.syncMySQLDatabase = async (req, res) => {
   ) {
     try {
       const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
+        "https://es-services-xckw.onrender.com/api/v1/category",
         {
           name: name,
           type: type,
@@ -2580,7 +2617,7 @@ exports.syncPostgreSQLDatabase = async (req, res) => {
   ) {
     try {
       const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
+        "https://es-services-xckw.onrender.com/api/v1/category",
         {
           name: name,
           type: type,
@@ -2690,7 +2727,7 @@ exports.syncMongoData = async (req, res) => {
   ) {
     try {
       const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
+        "https://es-services-xckw.onrender.com/api/v1/category",
         {
           name: name,
           type: type,
@@ -2789,7 +2826,7 @@ exports.syncMSSQLDatabase = async (req, res) => {
     try {
       // Step 1: Create a new category in Elastic Search
       const esNewCategoryResponse = await axios.post(
-        "https://es-services.onrender.com/api/v1/category",
+        "https://es-services-xckw.onrender.com/api/v1/category",
         {
           name: name,
           type: type,
@@ -3052,7 +3089,7 @@ exports.syncDataFromDatasources = async (req, res) => {
     switch (dataSource_type) {
       case "googledrive":
         dataSourceSyncResponse = await axios.post(
-          "https://es-services.onrender.com/api/v1/sync-google-drive",
+          "https://es-services-xckw.onrender.com/api/v1/sync-google-drive",
           {
             ...req.body,
             type: "Google Drive",
@@ -3068,7 +3105,7 @@ exports.syncDataFromDatasources = async (req, res) => {
 
       case "onedrive":
         dataSourceSyncResponse = await axios.post(
-          "https://es-services.onrender.com/api/v1/sync-one-drive",
+          "https://es-services-xckw.onrender.com/api/v1/sync-one-drive",
           {
             ...req.body,
             type: "OneDrive",
@@ -3084,7 +3121,7 @@ exports.syncDataFromDatasources = async (req, res) => {
 
       case "sql":
         dataSourceSyncResponse = await axios.post(
-          "https://es-services.onrender.com/api/v1/mysql",
+          "https://es-services-xckw.onrender.com/api/v1/mysql",
           {
             ...req.body,
             type: "SQL Database",
@@ -3100,7 +3137,7 @@ exports.syncDataFromDatasources = async (req, res) => {
 
       case "postgresql":
         dataSourceSyncResponse = await axios.post(
-          "https://es-services.onrender.com/api/v1/postgres",
+          "https://es-services-xckw.onrender.com/api/v1/postgres",
           {
             ...req.body,
             type: "Postgres",
@@ -3116,7 +3153,7 @@ exports.syncDataFromDatasources = async (req, res) => {
 
       case "nosql":
         dataSourceSyncResponse = await axios.post(
-          "https://es-services.onrender.com/api/v1/mongodb",
+          "https://es-services-xckw.onrender.com/api/v1/mongodb",
           {
             ...req.body,
             type: "NoSQL Database",
@@ -3132,7 +3169,7 @@ exports.syncDataFromDatasources = async (req, res) => {
 
       case "mssql":
         dataSourceSyncResponse = await axios.post(
-          "https://es-services.onrender.com/api/v1/mssql",
+          "https://es-services-xckw.onrender.com/api/v1/mssql",
           {
             ...req.body,
             type: "MSSQL",
