@@ -17,6 +17,7 @@ const dataSourceRoutes = require("./routes/v1/datasourceRoutes");
 const mssqlRoutes = require("./routes/v1/mssqlsyncRoutes");
 const sharePointOnlineRoutes = require("./routes/v1/sharepointonlineRoutes");
 const wasabiRoutes = require("./routes/v1/wasabiRoutes");
+const searchLogRoutes = require("./routes/v1/searchLogRoutes");
 
 dotenv.config();
 
@@ -73,6 +74,9 @@ app.use("/api/v1/wasabi", wasabiRoutes);
 
 // use sync data source routes
 app.use("/api/v1/", dataSourceRoutes);
+
+// use user search behavior
+app.use("/api/v1/search_logs", searchLogRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;

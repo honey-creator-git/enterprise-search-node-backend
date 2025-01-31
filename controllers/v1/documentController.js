@@ -67,6 +67,10 @@ const {
   processFileContent,
 } = require("../../webhook/v1/wasabiwebhookServices");
 const {
+  logSearchActivity,
+  updateAzureSearchDocument,
+} = require("../../webhook/v1/userSearchLogBehaviorServices");
+const {
   uploadFileToBlob,
   getContainerStats,
 } = require("../../services/v1/blobStorage");
@@ -1247,8 +1251,8 @@ exports.decodeUserTokenAndSave = async (req, res) => {
               name: "lastViewedAt",
               type: "Edm.DateTimeOffset",
               filterable: true,
-              sortable: true
-            }
+              sortable: true,
+            },
           ],
           suggesters: [
             {
@@ -3232,5 +3236,36 @@ exports.getStorageContainerSizeAndCount = async (req, res) => {
   } catch (error) {
     console.error("Error in controller:", error.message);
     return res.status(500).json({ error: "Failed to fetch data source types" });
+  }
+};
+
+exports.userSearchLogsBehavior = async (req, res) => {
+  const indexName = `tenant_${req.coid.toLowerCase()}`;
+
+  const { documentId, query } = req.body;
+  const userId = req.userId;
+  const coid = req.coid;
+
+  if (!query || !documentId) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
+    // Step 1: Log search activity in Elasticsearch
+    await logSearchActivity(coid, userId, query, documentId);
+
+    // Step 2: Update document fields in Azure AI Search index
+    await updateAzureSearchDocument(documentId, indexName);
+
+    return res
+      .status(200)
+      .json({
+        message: "User interaction logged and document updated successfully!",
+      });
+  } catch (error) {
+    console.error("Error processing user interaction:", error.message);
+    return res
+      .status(500)
+      .json({ error: "Failed to process user interaction" });
   }
 };
