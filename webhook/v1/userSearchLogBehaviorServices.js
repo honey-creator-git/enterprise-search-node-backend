@@ -24,7 +24,7 @@ async function updateAzureSearchDocument(documentId, indexName) {
   try {
     // Step 1: Retrieve the document
     const response = await axios.get(
-      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/${documentId}?api-version=2023-07-01-Preview`,
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs('${documentId}')?api-version=2023-07-01-Preview`,
       {
         headers: {
           "api-key": process.env.AZURE_SEARCH_API_KEY,
