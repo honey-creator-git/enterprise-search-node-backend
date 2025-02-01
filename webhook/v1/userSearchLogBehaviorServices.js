@@ -34,19 +34,24 @@ async function updateAzureSearchDocument(documentId, indexName) {
 
     const document = response.data;
 
-    // Step 2: Increment `searchCount` and `clickCount`
-    const updatedDocument = {
-      ...document,
+    // Step 2: Prepare only the fields to update
+    const updatedFields = {
+      id: documentId, // ID is required for the update
       searchCount: (document.searchCount || 0) + 1,
       clickCount: (document.clickCount || 0) + 1,
       lastViewedAt: new Date().toISOString(),
     };
 
-    // Step 3: Update the document in the Azure AI Search index
+    // Step 3: Send update request with only the updated fields
     await axios.post(
       `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/index?api-version=2023-07-01-Preview`,
       {
-        value: [updatedDocument],
+        value: [
+          {
+            ...updatedFields,
+            "@search.action": "mergeOrUpload", // Merge or create the document
+          },
+        ],
       },
       {
         headers: {
