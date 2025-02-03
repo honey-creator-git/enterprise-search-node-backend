@@ -1284,8 +1284,9 @@ exports.decodeUserTokenAndSave = async (req, res) => {
                   boost: 5,
                   interpolation: "linear",
                   magnitude: {
-                    constant: 1, // Instead of `min`, use `constant` for base magnitude.
-                    shouldBoostBeyondRangeByConstant: false,
+                    boostingRangeStart: 1,
+                    boostingRangeEnd: 100,
+                    constantBoostBeyondRange: false,
                   },
                 },
                 {
@@ -1294,8 +1295,9 @@ exports.decodeUserTokenAndSave = async (req, res) => {
                   boost: 3,
                   interpolation: "linear",
                   magnitude: {
-                    constant: 1, // Use `constant` instead of `min`.
-                    shouldBoostBeyondRangeByConstant: false,
+                    boostingRangeStart: 1,
+                    boostingRangeEnd: 100,
+                    constantBoostBeyondRange: false,
                   },
                 },
               ],
