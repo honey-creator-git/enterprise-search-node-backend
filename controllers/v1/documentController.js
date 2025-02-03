@@ -3364,7 +3364,8 @@ exports.getPopularDocuments = async (req, res) => {
       {
         search: "*", // Wildcard query
         scoringProfile: "popularityBoost",
-        orderby: "clickCount desc",
+        orderby: "clickCount desc", // Sort by clickCount
+        filter: "searchCount ne null and clickCount ne null", // Exclude null values
         top: 10, // Limit to top 10 documents
       },
       {
