@@ -3304,7 +3304,7 @@ exports.userSearchLogsBehavior = async (req, res) => {
 exports.searchWithSuggestions = async (req, res) => {
   const { query } = req.body;
   const indexName = ("tenant_" + req.coid).toLowerCase();
-  const searchLogsIndex = `search_logs_${coid}`;
+  const searchLogsIndex = `search_logs_${req.coid.toLowerCase()}`;
 
   if (!query) {
     return res.status(400).json({ error: "Query is required" });
