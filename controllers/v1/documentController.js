@@ -3347,10 +3347,9 @@ exports.searchWithSuggestions = async (req, res) => {
     ]);
 
     // Process ElasticSearch logs results
-    const previousQueries =
-      elasticSearchLogsResponse.aggregations.unique_queries.buckets.map(
-        (bucket) => bucket.key
-      );
+    const previousQueries = elasticSearchLogsResponse.hits.hits.map(
+      (hit) => hit._source.query
+    );
 
     res.status(200).json({
       previousSearchQueries: previousQueries, // Matching user search queries
