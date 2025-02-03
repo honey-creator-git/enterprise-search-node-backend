@@ -3334,7 +3334,9 @@ exports.searchWithSuggestions = async (req, res) => {
           queryType: "semantic",
           scoringProfile: "popularityBoost",
           searchMode: "any",
+          orderby: "clickCount desc", // Sort by clickCount
           semanticConfiguration: "es-semantic-config",
+          filter: "searchCount ne null and clickCount ne null", // Exclude null values
           top: 10,
         },
         {
