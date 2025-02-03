@@ -3346,10 +3346,12 @@ exports.searchWithSuggestions = async (req, res) => {
       ),
     ]);
 
-    // Process ElasticSearch logs results
-    const previousQueries = elasticSearchLogsResponse.hits.hits.map(
-      (hit) => hit._source.query
-    );
+    // Extract matching previous queries and remove duplicates
+    const previousQueries = [
+      ...new Set(
+        elasticSearchLogsResponse.hits.hits.map((hit) => hit._source.query)
+      ),
+    ];
 
     res.status(200).json({
       previousSearchQueries: previousQueries, // Matching user search queries
