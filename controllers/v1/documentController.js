@@ -1313,11 +1313,15 @@ exports.decodeUserTokenAndSave = async (req, res) => {
           },
         });
       } catch (creationError) {
-        console.error(
-          `Failed to create index: ${
-            creationError.response?.data || creationError.message
-          }`
-        );
+        if (creationError.response) {
+          console.error(
+            "Error Response:",
+            JSON.stringify(creationError.response.data, null, 2)
+          );
+          console.error("Status Code:", creationError.response.status);
+        } else {
+          console.error("Error Message:", creationError.message);
+        }
         throw creationError; // Handle index creation errors
       }
     } else {
