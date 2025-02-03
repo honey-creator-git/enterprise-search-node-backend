@@ -3303,8 +3303,9 @@ exports.userSearchLogsBehavior = async (req, res) => {
 
 exports.searchWithSuggestions = async (req, res) => {
   const { query } = req.body;
-  const indexName = ("tenant_" + req.coid).toLowerCase();
-  const searchLogsIndex = `search_logs_${req.coid.toLowerCase()}`;
+  const coid = req.coid.toLowerCase();
+  const indexName = `tenant_${coid}`;
+  const searchLogsIndex = `search_logs_${coid}`;
 
   if (!query) {
     return res.status(400).json({ error: "Query is required" });
@@ -3312,7 +3313,7 @@ exports.searchWithSuggestions = async (req, res) => {
 
   try {
     const [elasticSearchLogsResponse, azureSearchResponse] = await Promise.all([
-      // Fetch matching previous queries from search_logs index in ElasticSearch
+      // Fetch matching previous queries from search_logs index in Elasticsearch
       client.search({
         index: searchLogsIndex,
         body: {
@@ -3348,19 +3349,23 @@ exports.searchWithSuggestions = async (req, res) => {
       ),
     ]);
 
-    // Extract matching previous queries and remove duplicates
-    const previousQueries = [
-      ...new Set(
-        elasticSearchLogsResponse.hits.hits.map((hit) => hit._source.query)
-      ),
-    ];
+    // Ensure Elasticsearch response contains hits
+    const previousQueries =
+      elasticSearchLogsResponse.hits?.hits?.map((hit) => hit._source.query) ||
+      [];
+
+    // Remove duplicates from previous queries
+    const uniqueQueries = [...new Set(previousQueries)];
 
     res.status(200).json({
-      previousSearchQueries: previousQueries, // Matching user search queries
+      previousSearchQueries: uniqueQueries, // Matching user search queries
       searchResults: azureSearchResponse.data.value, // Azure search results
     });
   } catch (error) {
-    console.error("Error processing search request:", error.message);
+    console.error(
+      "Error processing search request:",
+      error.response?.data || error.message
+    );
     res.status(500).json({ error: "Failed to process search request" });
   }
 };
