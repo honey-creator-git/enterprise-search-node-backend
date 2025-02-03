@@ -3318,7 +3318,6 @@ exports.searchWithSuggestions = async (req, res) => {
           suggesterName: "sg",
           top: 5,
           searchFields: "title,content,description",
-          spelling: "spellCheck",
         },
         {
           headers: {
