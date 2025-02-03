@@ -3300,3 +3300,84 @@ exports.userSearchLogsBehavior = async (req, res) => {
       .json({ error: "Failed to process user interaction" });
   }
 };
+
+exports.searchWithSuggestions = async (req, res) => {
+  const { query } = req.body;
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+
+  if (!query) {
+    return res.status(400).json({ error: "Query is required" });
+  }
+
+  try {
+    const [suggestionsResponse, searchResponse] = await Promise.all([
+      axios.post(
+        `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/suggest?api-version=2023-07-01-Preview`,
+        {
+          search: query,
+          suggesterName: "sg",
+          top: 5,
+          searchFields: "title,content,description",
+          spelling: "spellCheck",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": process.env.AZURE_SEARCH_API_KEY,
+          },
+        }
+      ),
+      axios.post(
+        `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2023-07-01-Preview`,
+        {
+          search: query,
+          queryType: "semantic",
+          scoringProfile: "popularityBoost",
+          searchMode: "any",
+          semanticConfiguration: "es-semantic-config",
+          top: 10,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": process.env.AZURE_SEARCH_API_KEY,
+          },
+        }
+      ),
+    ]);
+
+    res.status(200).json({
+      autoCompleteSuggestions: suggestionsResponse.data.value,
+      searchResults: searchResponse.data.value,
+    });
+  } catch (error) {
+    console.error("Error processing search request:", error.message);
+    res.status(500).json({ error: "Failed to process search request" });
+  }
+};
+
+exports.getPopularDocuments = async (req, res) => {
+  const indexName = ("tenant_" + req.coid).toLowerCase();
+  try {
+    const response = await axios.post(
+      `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2023-07-01-Preview`,
+      {
+        search: "*", // Wildcard query
+        scoringProfile: "popularityBoost",
+        orderby: "clickCount desc",
+        top: 10, // Limit to top 10 documents
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.AZURE_SEARCH_API_KEY,
+        },
+      }
+    );
+
+    res.status(200).json(response.data.value);
+  } catch (error) {
+    console.error("Error fetching popular documents:", error.message);
+    res.status(500).json({ error: "Failed to fetch popular documents" });
+  }
+};

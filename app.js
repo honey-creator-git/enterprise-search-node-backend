@@ -18,6 +18,8 @@ const mssqlRoutes = require("./routes/v1/mssqlsyncRoutes");
 const sharePointOnlineRoutes = require("./routes/v1/sharepointonlineRoutes");
 const wasabiRoutes = require("./routes/v1/wasabiRoutes");
 const searchLogRoutes = require("./routes/v1/searchLogRoutes");
+const popularDocumentsRoutes = require("./routes/v1/popularDocumentsRoutes");
+const relevantDocumentsRoutes = require("./routes/v1/relevantDocumentsRoutes");
 
 dotenv.config();
 
@@ -77,6 +79,12 @@ app.use("/api/v1/", dataSourceRoutes);
 
 // use user search behavior
 app.use("/api/v1/search_logs", searchLogRoutes);
+
+// Get popular documents
+app.use("/api/v1/popular", popularDocumentsRoutes);
+
+// Get relevant documents with auto suggestions
+app.use("/api/v1/relevants", relevantDocumentsRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
