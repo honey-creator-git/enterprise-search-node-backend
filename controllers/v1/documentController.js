@@ -1274,6 +1274,35 @@ exports.decodeUserTokenAndSave = async (req, res) => {
               },
             ],
           },
+          scoringProfiles: [
+            {
+              name: "popularityBoost",
+              functions: [
+                {
+                  type: "magnitude",
+                  fieldName: "clickCount",
+                  boost: 5,
+                  interpolation: "linear",
+                  magnitude: {
+                    min: 1,
+                    max: 100,
+                    shouldBoostBeyondRangeByConstant: false,
+                  },
+                },
+                {
+                  type: "magnitude",
+                  fieldName: "searchCount",
+                  boost: 3,
+                  interpolation: "linear",
+                  magnitude: {
+                    min: 1,
+                    max: 100,
+                    shouldBoostBeyondRangeByConstant: false,
+                  },
+                },
+              ],
+            },
+          ],
         };
 
         // Step 3: Create the index
@@ -3257,11 +3286,9 @@ exports.userSearchLogsBehavior = async (req, res) => {
     // Step 2: Update document fields in Azure AI Search index
     await updateAzureSearchDocument(documentId, indexName);
 
-    return res
-      .status(200)
-      .json({
-        message: "User interaction logged and document updated successfully!",
-      });
+    return res.status(200).json({
+      message: "User interaction logged and document updated successfully!",
+    });
   } catch (error) {
     console.error("Error processing user interaction:", error.message);
     return res
