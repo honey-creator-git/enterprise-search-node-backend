@@ -3304,28 +3304,29 @@ exports.userSearchLogsBehavior = async (req, res) => {
 exports.searchWithSuggestions = async (req, res) => {
   const { query } = req.body;
   const indexName = ("tenant_" + req.coid).toLowerCase();
+  const searchLogsIndex = `search_logs_${coid}`;
 
   if (!query) {
     return res.status(400).json({ error: "Query is required" });
   }
 
   try {
-    const [suggestionsResponse, searchResponse] = await Promise.all([
-      axios.post(
-        `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/suggest?api-version=2023-07-01-Preview`,
-        {
-          search: query,
-          suggesterName: "sg",
-          top: 5,
-          searchFields: "title,content,description",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "api-key": process.env.AZURE_SEARCH_API_KEY,
+    const [elasticSearchLogsResponse, azureSearchResponse] = await Promise.all([
+      // Fetch matching previous queries from search_logs index in ElasticSearch
+      client.search({
+        index: searchLogsIndex,
+        body: {
+          query: {
+            match_phrase_prefix: {
+              query: query, // Match user input as prefix in the query field
+            },
           },
-        }
-      ),
+          size: 10, // Limit results to top 10 matching logs
+          _source: ["query"], // Only return the `query` field
+        },
+      }),
+
+      // Fetch search results from Azure AI Search
       axios.post(
         `${process.env.AZURE_SEARCH_ENDPOINT}/indexes/${indexName}/docs/search?api-version=2023-07-01-Preview`,
         {
@@ -3345,9 +3346,15 @@ exports.searchWithSuggestions = async (req, res) => {
       ),
     ]);
 
+    // Process ElasticSearch logs results
+    const previousQueries =
+      elasticSearchLogsResponse.aggregations.unique_queries.buckets.map(
+        (bucket) => bucket.key
+      );
+
     res.status(200).json({
-      autoCompleteSuggestions: suggestionsResponse.data.value,
-      searchResults: searchResponse.data.value,
+      previousSearchQueries: previousQueries, // Matching user search queries
+      searchResults: azureSearchResponse.data.value, // Azure search results
     });
   } catch (error) {
     console.error("Error processing search request:", error.message);
