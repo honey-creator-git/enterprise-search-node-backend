@@ -4,7 +4,7 @@ const setRoleMiddleware = require("../../middleware/setRoleMiddleware");
 const checkViewerAccess = require("../../middleware/checkViewerAccess");
 const router = express.Router();
 
-router.post(
+router.get(
   "/",
   setRoleMiddleware,
   checkViewerAccess,
